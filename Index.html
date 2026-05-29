@@ -47,6 +47,9 @@
       <button type="button" class="nav-link rounded-pill" id="dash-tab" data-bs-toggle="tab" data-bs-target="#dash-content" onclick="loadData()">Dashboard</button>
     </li>
     <li class="nav-item">
+      <button type="button" class="nav-link rounded-pill" id="costs-tab" data-bs-toggle="tab" data-bs-target="#costs-content" onclick="loadCostData()">Kosten</button>
+    </li>
+    <li class="nav-item">
       <button type="button" class="nav-link rounded-pill" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-content">Setup</button>
     </li>
   </ul>
@@ -147,8 +150,9 @@
         <div class="col-6"><div class="card-dash bg-engine p-3"><i class="bi bi-gear-wide-connected"></i><div class="small">Motor (h)</div><div class="h4 m-0" id="d-hours">0</div></div></div>
         <div class="col-6"><div class="card-dash bg-seatime p-3"><i class="bi bi-clock-history"></i><div class="small">Zeit auf See</div><div class="h4 m-0" id="d-seatime">0 h</div></div></div>
         <div class="col-6"><div class="card-dash bg-fuel p-3"><i class="bi bi-fuel-pump"></i><div class="small">Benzin (L)</div><div class="h4 m-0" id="d-liters">0</div></div></div>
-        <div class="col-6"><div class="card-dash bg-cost p-3"><i class="bi bi-cash-stack"></i><div class="small">Kosten</div><div class="h4 m-0" id="d-cost">0</div></div></div>
+        <div class="col-6"><div class="card-dash bg-cost p-3"><i class="bi bi-cash-stack"></i><div class="small">Benzinkosten</div><div class="h4 m-0" id="d-cost">0</div></div></div>
         <div class="col-6"><div class="card-dash bg-wine p-3"><i class="bi bi-droplet-half"></i><div class="small">Wein</div><div class="h4 m-0" id="d-wine">0</div></div></div>
+        <div class="col-6"><div class="card-dash p-3" style="background: linear-gradient(45deg, #6f42c1, #4a1a8a);"><i class="bi bi-wallet2"></i><div class="small">Jahreskosten</div><div class="h4 m-0" id="d-yearcost">CHF 0</div></div></div>
       </div>
 
       <div class="table-responsive bg-white rounded shadow-sm">
@@ -160,6 +164,88 @@
     </div>
 
 
+
+    <!-- KOSTEN TAB -->
+    <div class="tab-pane fade" id="costs-content">
+
+      <!-- Jahresauswahl -->
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="m-0 text-primary"><i class="bi bi-wallet2"></i> Jahreskosten</h5>
+        <select class="form-select form-select-sm" id="costYearSelect" style="width: auto;" onchange="loadCostData()">
+        </select>
+      </div>
+
+      <!-- Kosten-Zusammenfassung -->
+      <div class="row g-2 mb-4">
+        <div class="col-6">
+          <div class="card-dash p-3" style="background: linear-gradient(45deg, #6f42c1, #4a1a8a);">
+            <i class="bi bi-calculator"></i>
+            <div class="small">Jahreskosten Total</div>
+            <div class="h4 m-0" id="cost-total">CHF 0.00</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="card-dash p-3" style="background: linear-gradient(45deg, #fd7e14, #c55a00);">
+            <i class="bi bi-list-check"></i>
+            <div class="small">Einträge</div>
+            <div class="h4 m-0" id="cost-count">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kosten nach Kategorie -->
+      <div class="card shadow-sm border-0 mb-4 p-3">
+        <h6 class="text-muted mb-3"><i class="bi bi-pie-chart"></i> Nach Kategorie</h6>
+        <div id="costCategoryBreakdown"></div>
+      </div>
+
+      <!-- Neuer Kosten-Eintrag -->
+      <div class="card shadow-sm border-0 p-4 mb-4">
+        <h6 class="text-primary mb-3"><i class="bi bi-plus-circle"></i> Kosten erfassen</h6>
+        <form id="costForm">
+          <input type="hidden" id="costEntryId">
+          <div class="row mb-3">
+            <div class="col-6">
+              <label class="small text-muted">Datum</label>
+              <input type="date" class="form-control" id="costDate" required>
+            </div>
+            <div class="col-6">
+              <label class="small text-muted">Kategorie</label>
+              <select class="form-select" id="costCategory" required>
+                <option value="Versicherung">Versicherung</option>
+                <option value="Bootsplatz">Bootsplatz</option>
+                <option value="Unterhalt">Unterhalt</option>
+                <option value="Steuern">Steuern</option>
+                <option value="Benzin">Benzin</option>
+                <option value="Zubehör">Zubehör</option>
+                <option value="Sonstige">Sonstige</option>
+              </select>
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-6">
+              <label class="small text-muted">Betrag (CHF)</label>
+              <input type="number" step="0.01" class="form-control" id="costAmount" placeholder="0.00" required>
+            </div>
+            <div class="col-6">
+              <label class="small text-muted">Beschreibung</label>
+              <input type="text" class="form-control" id="costDescription" placeholder="z.B. Haftpflicht 2025">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 py-2 shadow" id="saveCostBtn">Kosten speichern</button>
+          <button type="button" class="btn btn-secondary w-100 mt-2 d-none" id="cancelCostEditBtn" onclick="resetCostForm()">Abbrechen</button>
+        </form>
+      </div>
+
+      <!-- Kosten-Tabelle -->
+      <div class="table-responsive bg-white rounded shadow-sm">
+        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+          <thead class="table-light"><tr><th>Datum</th><th>Kategorie</th><th>Betrag</th><th>Aktion</th></tr></thead>
+          <tbody id="costTableBody"></tbody>
+        </table>
+      </div>
+
+    </div>
 
     <div class="tab-pane fade" id="settings-content">
       <div class="card p-4 shadow-sm border-0 text-center">
@@ -301,6 +387,13 @@
     document.getElementById('d-liters').innerText = liters.toFixed(1);
     document.getElementById('d-cost').innerText = cost.toFixed(2);
     document.getElementById('d-wine').innerText = wine;
+
+    // Jahreskosten aus dem Kosten-Sheet laden
+    google.script.run
+      .withSuccessHandler(summary => {
+        document.getElementById('d-yearcost').innerText = "CHF " + summary.total.toFixed(2);
+      })
+      .getCostSummary(new Date().getFullYear().toString());
   }
 
   function renderTable(data) {
@@ -653,6 +746,197 @@ function generatePDF() {
     });
 
   }).getLogData();
+}
+
+// =============================================
+// KOSTEN-TAB LOGIK
+// =============================================
+let globalCostData = [];
+
+function loadCostData() {
+  // Jahresauswahl befüllen
+  const select = document.getElementById('costYearSelect');
+  const currentYear = new Date().getFullYear();
+  if (select.options.length === 0) {
+    for (let y = currentYear + 1; y >= currentYear - 5; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.text = y;
+      if (y === currentYear) opt.selected = true;
+      select.appendChild(opt);
+    }
+  }
+
+  google.script.run
+    .withSuccessHandler(data => {
+      globalCostData = data;
+      const selectedYear = document.getElementById('costYearSelect').value;
+      renderCostDashboard(data, selectedYear);
+      renderCostTable(data, selectedYear);
+    })
+    .withFailureHandler(err => {
+      alert("Fehler beim Laden der Kosten: " + err.message);
+    })
+    .getCostData();
+}
+
+function renderCostDashboard(data, year) {
+  const filtered = data.filter(row => {
+    const rowYear = row[5] ? row[5].toString() : "";
+    return rowYear === year.toString();
+  });
+
+  let total = 0;
+  const byCategory = {};
+
+  filtered.forEach(row => {
+    const betrag = parseFloat(row[4]) || 0;
+    const kat = row[2] || "Sonstige";
+    total += betrag;
+    byCategory[kat] = (byCategory[kat] || 0) + betrag;
+  });
+
+  document.getElementById('cost-total').innerText = "CHF " + total.toFixed(2);
+  document.getElementById('cost-count').innerText = filtered.length;
+
+  // Kategorie-Aufschlüsselung
+  const container = document.getElementById('costCategoryBreakdown');
+  if (Object.keys(byCategory).length === 0) {
+    container.innerHTML = '<p class="text-muted small text-center">Noch keine Kosten erfasst.</p>';
+    return;
+  }
+
+  const categoryIcons = {
+    "Versicherung": "bi-shield-check",
+    "Bootsplatz": "bi-geo-alt",
+    "Unterhalt": "bi-wrench",
+    "Steuern": "bi-bank",
+    "Benzin": "bi-fuel-pump",
+    "Zubehör": "bi-bag",
+    "Sonstige": "bi-three-dots"
+  };
+
+  const categoryColors = {
+    "Versicherung": "#4e73df",
+    "Bootsplatz": "#1cc88a",
+    "Unterhalt": "#f6c23e",
+    "Steuern": "#e74a3b",
+    "Benzin": "#36b9cc",
+    "Zubehör": "#6f42c1",
+    "Sonstige": "#858796"
+  };
+
+  let html = '';
+  Object.entries(byCategory)
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([kat, betrag]) => {
+      const pct = total > 0 ? (betrag / total * 100) : 0;
+      const icon = categoryIcons[kat] || "bi-three-dots";
+      const color = categoryColors[kat] || "#858796";
+      html += `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div><i class="bi ${icon}" style="color:${color}"></i> <span class="small">${kat}</span></div>
+          <span class="small fw-bold">CHF ${betrag.toFixed(2)}</span>
+        </div>
+        <div class="progress mb-3" style="height: 8px;">
+          <div class="progress-bar" style="width:${pct}%; background-color:${color}"></div>
+        </div>`;
+    });
+  container.innerHTML = html;
+}
+
+function renderCostTable(data, year) {
+  const filtered = data.filter(row => {
+    const rowYear = row[5] ? row[5].toString() : "";
+    return rowYear === year.toString();
+  });
+
+  let html = "";
+  const sorted = [...filtered].sort((a, b) => new Date(b[1]) - new Date(a[1]));
+
+  sorted.forEach(row => {
+    let dateDisplay = "–";
+    if (row[1]) {
+      const d = new Date(row[1]);
+      if (!isNaN(d)) dateDisplay = d.toLocaleDateString('de-CH');
+    }
+    const betrag = parseFloat(row[4]) || 0;
+    const beschreibung = row[3] ? `<br><small class="text-muted">${row[3]}</small>` : "";
+
+    html += `<tr>
+      <td>${dateDisplay}</td>
+      <td><strong>${row[2]}</strong>${beschreibung}</td>
+      <td class="text-nowrap">CHF ${betrag.toFixed(2)}</td>
+      <td class="text-end">
+        <i class="bi bi-pencil-square btn-edit me-3" onclick="editCostEntry('${row[0]}')"></i>
+        <i class="bi bi-trash btn-delete" onclick="deleteCostItem('${row[0]}')"></i>
+      </td>
+    </tr>`;
+  });
+
+  document.getElementById('costTableBody').innerHTML = html || '<tr><td colspan="4" class="text-center text-muted">Keine Einträge</td></tr>';
+}
+
+// Kosten-Formular absenden
+document.getElementById('costForm').onsubmit = function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('saveCostBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Speichert...';
+
+  const data = {
+    id: document.getElementById('costEntryId').value,
+    datum: document.getElementById('costDate').value,
+    kategorie: document.getElementById('costCategory').value,
+    beschreibung: document.getElementById('costDescription').value,
+    betrag: document.getElementById('costAmount').value
+  };
+
+  google.script.run
+    .withSuccessHandler(() => {
+      resetCostForm();
+      loadCostData();
+      btn.disabled = false;
+      btn.innerText = "Kosten speichern";
+      alert("Kosten gespeichert!");
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false;
+      btn.innerText = "Kosten speichern";
+      alert("Fehler: " + err.message);
+    })
+    .saveCostEntry(data);
+};
+
+function resetCostForm() {
+  document.getElementById('costForm').reset();
+  document.getElementById('costEntryId').value = "";
+  document.getElementById('saveCostBtn').innerText = "Kosten speichern";
+  document.getElementById('cancelCostEditBtn').classList.add('d-none');
+  document.getElementById('costDate').value = new Date().toISOString().split('T')[0];
+}
+
+function editCostEntry(id) {
+  const entry = globalCostData.find(r => r[0].toString() === id.toString());
+  if (!entry) return;
+
+  document.getElementById('costEntryId').value = entry[0];
+  document.getElementById('costDate').value = entry[1];
+  document.getElementById('costCategory').value = entry[2];
+  document.getElementById('costDescription').value = entry[3];
+  document.getElementById('costAmount').value = entry[4];
+
+  document.getElementById('saveCostBtn').innerText = "Änderung speichern";
+  document.getElementById('cancelCostEditBtn').classList.remove('d-none');
+  document.getElementById('costForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteCostItem(id) {
+  if (confirm("Diesen Kosteneintrag wirklich löschen?")) {
+    google.script.run
+      .withSuccessHandler(() => { loadCostData(); })
+      .deleteCostEntry(id);
+  }
 }
 
 // --- DARK MODE LOGIK ---

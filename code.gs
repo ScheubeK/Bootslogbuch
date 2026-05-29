@@ -162,6 +162,100 @@ function getCsvData() {
   return data.map(row => row.join(",")).join("\n");
 }
 
+// =============================================
+// KOSTEN-MODUL
+// =============================================
+const COST_SHEET_NAME = "Kosten";
+
+function setupCostSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(COST_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(COST_SHEET_NAME);
+    const headers = ["ID", "Datum", "Kategorie", "Beschreibung", "Betrag", "Jahr"];
+    sheet.appendRow(headers);
+    sheet.getRange("A1:F1").setFontWeight("bold").setBackground("#e0e0e0");
+  }
+}
+
+function saveCostEntry(data) {
+  setupCostSheet();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(COST_SHEET_NAME);
+  const values = sheet.getDataRange().getValues();
+  const isNew = !data.id;
+
+  // Jahr aus dem Datum ableiten
+  const jahr = data.datum ? data.datum.substring(0, 4) : new Date().getFullYear().toString();
+
+  const rowData = [
+    data.id || new Date().getTime().toString(),
+    data.datum,
+    data.kategorie,
+    data.beschreibung,
+    Number(data.betrag) || 0,
+    jahr
+  ];
+
+  if (!isNew) {
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0].toString() === data.id.toString()) {
+        sheet.getRange(i + 1, 1, 1, 6).setValues([rowData]);
+        return "aktualisiert";
+      }
+    }
+  }
+  sheet.appendRow(rowData);
+  return "gespeichert";
+}
+
+function getCostData() {
+  setupCostSheet();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(COST_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+
+  return data.slice(1).map(row => {
+    if (row[1] instanceof Date) {
+      row[1] = Utilities.formatDate(row[1], timezone, "yyyy-MM-dd");
+    }
+    return row;
+  });
+}
+
+function deleteCostEntry(id) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(COST_SHEET_NAME);
+  if (!sheet) return false;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0].toString() === id.toString()) {
+      sheet.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function getCostSummary(year) {
+  setupCostSheet();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(COST_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  const targetYear = year || new Date().getFullYear().toString();
+
+  const summary = { total: 0, byCategory: {} };
+
+  for (let i = 1; i < data.length; i++) {
+    const rowYear = data[i][5] ? data[i][5].toString() : "";
+    if (rowYear === targetYear.toString()) {
+      const betrag = parseFloat(data[i][4]) || 0;
+      const kategorie = data[i][2] || "Sonstige";
+      summary.total += betrag;
+      summary.byCategory[kategorie] = (summary.byCategory[kategorie] || 0) + betrag;
+    }
+  }
+  return summary;
+}
+
 // Speichert die Startzeit serverseitig bei Google
 function setServerStartTime(time) {
   PropertiesService.getScriptProperties().setProperty('ACTIVE_TRIP_START', time);
