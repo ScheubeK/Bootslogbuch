@@ -1,0 +1,87 @@
+// Reine Berechnungen ohne Browser- oder Google-Apps-Script-Abhängigkeit.
+// Sie werden in Index.html eingebunden und können lokal mit node --test geprüft werden.
+window.LogbookCore = window.LogbookCore || (() => {
+  function numberOrZero(value) {
+    const number = Number.parseFloat(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function validDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function calculateDashboard(rows) {
+    return rows.reduce((metrics, row) => {
+      const motorStart = numberOrZero(row[3]);
+      const motorEnd = numberOrZero(row[4]);
+      const liters = numberOrZero(row[6]);
+      const pricePerLiter = numberOrZero(row[7]);
+      const start = validDate(row[1]);
+      const end = validDate(row[2]);
+
+      metrics.engineHours += motorEnd - motorStart;
+      metrics.fuelLiters += liters;
+      metrics.fuelCost += liters * pricePerLiter;
+      metrics.wine += numberOrZero(row[8]);
+
+      if (start && end) {
+        const duration = end - start;
+        if (duration > 0) metrics.seaTimeMilliseconds += duration;
+      }
+
+      return metrics;
+    }, {
+      trips: rows.length,
+      engineHours: 0,
+      fuelLiters: 0,
+      fuelCost: 0,
+      wine: 0,
+      seaTimeMilliseconds: 0,
+      seaTimeHours: 0
+    });
+  }
+
+  function withSeaTimeHours(metrics) {
+    return {
+      ...metrics,
+      seaTimeHours: metrics.seaTimeMilliseconds / (1000 * 60 * 60)
+    };
+  }
+
+  function formatDuration(milliseconds) {
+    const totalMinutes = Math.floor(Math.max(0, milliseconds) / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return hours + "h " + minutes + "m";
+  }
+
+  function calculateCostSummary(rows) {
+    const byCategory = {
+      Benzin: 0,
+      Versicherungen: 0,
+      Steuern: 0,
+      Bootsplatz: 0,
+      Unterhalt: 0
+    };
+    rows.forEach(row => {
+      const category = row[2];
+      const amount = numberOrZero(row[4]);
+      if (Object.prototype.hasOwnProperty.call(byCategory, category)) {
+        byCategory[category] += amount;
+      }
+    });
+    return {
+      total: Object.values(byCategory).reduce((sum, amount) => sum + amount, 0),
+      byCategory
+    };
+  }
+
+  return Object.freeze({
+    calculateDashboard(rows) {
+      return withSeaTimeHours(calculateDashboard(rows));
+    },
+    calculateCostSummary,
+    formatDuration
+  });
+})();
