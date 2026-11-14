@@ -7,13 +7,17 @@
   const COSTS_KEY = 'bootslogbuch.local.costs.v1';
   const ACTIVE_TRIP_KEY = 'bootslogbuch.local.active-trip.v1';
   const BOAT_NAME_KEY = 'bootslogbuch.local.boat-name.v1';
-  const LOG_HEADERS = ['ID', 'Start', 'Ende', 'Motor Start', 'Motor Ende', 'Getankt', 'Liter', 'Preis/L', 'Wein', 'Bemerkungen', 'Wetter', 'Temp', 'Wind'];
+  const LOG_HEADERS = ['ID', 'Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temp', 'Wind'];
   const COST_HEADERS = ['ID', 'Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'];
 
   function readEntries() {
     try {
       const entries = JSON.parse(localStorage.getItem(ENTRIES_KEY) || '[]');
-      return Array.isArray(entries) ? entries : [];
+      if (!Array.isArray(entries)) return [];
+      return entries.map(entry => entry.length >= 13
+        ? [entry[0], entry[1], entry[2], entry[3], entry[4], entry[8], entry[9], entry[10], entry[11], entry[12]]
+        : entry
+      );
     } catch (_) {
       return [];
     }
@@ -71,9 +75,6 @@
         data.endDateTime,
         Number(data.motorStart),
         Number(data.motorEnd),
-        'Nein',
-        0,
-        0,
         numberOrZero(data.wine),
         data.remarks || '',
         weather[0],

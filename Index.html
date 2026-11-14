@@ -55,6 +55,13 @@
 </head>
 <body>
 
+<div id="appNotice" class="toast align-items-center text-bg-success border-0 position-fixed top-0 start-50 translate-middle-x mt-3" role="status" aria-live="polite" aria-atomic="true" style="z-index: 1100; max-width: calc(100% - 2rem);">
+  <div class="d-flex">
+    <div id="appNoticeMessage" class="toast-body"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Schließen"></button>
+  </div>
+</div>
+
 <div class="container mt-3">
 
 <div class="d-flex justify-content-center align-items-center mb-4" style="text-align: center;">
@@ -251,7 +258,6 @@
           <label class="small text-muted" for="boatName">Name des Bootes</label>
           <input type="text" class="form-control mb-2" id="boatName" maxlength="60" placeholder="z. B. Seestern">
           <button type="submit" class="btn btn-outline-primary w-100">Bootsname speichern</button>
-          <div id="boatNameStatus" class="small text-success text-center mt-2 d-none"></div>
         </form>
       </div>
       <div class="card p-4 shadow-sm border-0 text-center">
@@ -311,6 +317,15 @@
     })[character]);
   }
 
+  function showNotice(message, variant = 'success') {
+    const notice = document.getElementById('appNotice');
+    notice.className = `toast align-items-center text-bg-${variant} border-0 position-fixed top-0 start-50 translate-middle-x mt-3`;
+    notice.style.zIndex = '1100';
+    notice.style.maxWidth = 'calc(100% - 2rem)';
+    document.getElementById('appNoticeMessage').textContent = message;
+    bootstrap.Toast.getOrCreateInstance(notice, { delay: 3200 }).show();
+  }
+
   function updateBoatNameTitle(name) {
     const normalizedName = String(name || '').trim();
     document.getElementById('boatNameTitle').textContent = normalizedName ? `: ${normalizedName}` : '';
@@ -330,18 +345,16 @@
   document.getElementById('boatNameForm').addEventListener('submit', event => {
     event.preventDefault();
     const button = event.currentTarget.querySelector('button[type="submit"]');
-    const status = document.getElementById('boatNameStatus');
     button.disabled = true;
     google.script.run
       .withSuccessHandler(name => {
         document.getElementById('boatName').value = name;
         updateBoatNameTitle(name);
-        status.textContent = name ? 'Bootsname gespeichert.' : 'Bootsname entfernt.';
-        status.classList.remove('d-none');
+        showNotice(name ? 'Bootsname gespeichert.' : 'Bootsname entfernt.');
         button.disabled = false;
       })
       .withFailureHandler(error => {
-        alert('Bootsname konnte nicht gespeichert werden: ' + error.message);
+        showNotice('Bootsname konnte nicht gespeichert werden: ' + error.message, 'danger');
         button.disabled = false;
       })
       .saveBoatName(document.getElementById('boatName').value);
@@ -389,19 +402,20 @@
       wine: document.getElementById('wine').value,
       remarks: document.getElementById('remarks').value
     };
+    const isUpdate = Boolean(data.id);
 
     google.script.run
       .withSuccessHandler(() => {
         resetForm();
-        loadData(); 
+        loadData();
         btn.disabled = false;
         btn.innerText = "Speichern";
-        alert("Erfolgreich gespeichert!");
+        showNotice(isUpdate ? 'Ausflug aktualisiert.' : 'Ausflug gespeichert.');
       })
       .withFailureHandler(err => {
         btn.disabled = false;
         btn.innerText = "Speichern";
-        alert("Speicher-Fehler: " + err.message);
+        showNotice('Ausflug konnte nicht gespeichert werden: ' + err.message, 'danger');
       })
       .saveOrUpdateEntry(data);
   };
@@ -477,13 +491,13 @@
       let hDiff = (parseFloat(row[4]) - parseFloat(row[3])) || 0;
       
       let weatherDisplay = "";
-      if (row[11] !== "" && row[11] !== undefined) {
-        let wDesc = row[10] ? row[10].charAt(0).toUpperCase() + row[10].slice(1) : "";
-        let wind = row[12] ? ` | <i class="bi bi-wind"></i> ${row[12]} km/h` : "";
-        weatherDisplay = `<small class="text-muted"><i class="bi bi-cloud-sun"></i> ${row[11]}°C, ${escapeHtml(wDesc)}${wind}</small>`;
+      if (row[8] !== "" && row[8] !== undefined) {
+        let wDesc = row[7] ? row[7].charAt(0).toUpperCase() + row[7].slice(1) : "";
+        let wind = row[9] ? ` | <i class="bi bi-wind"></i> ${row[9]} km/h` : "";
+        weatherDisplay = `<small class="text-muted"><i class="bi bi-cloud-sun"></i> ${row[8]}°C, ${escapeHtml(wDesc)}${wind}</small>`;
       }
-      const remarks = escapeHtml(row[9]).trim();
-      const wine = Number.parseFloat(row[8]) || 0;
+      const remarks = escapeHtml(row[6]).trim();
+      const wine = Number.parseFloat(row[5]) || 0;
 
       html += `<article class="card shadow-sm border-0 p-3">
         <div class="d-flex justify-content-between align-items-start gap-2">
@@ -510,8 +524,8 @@
     document.getElementById('motorStart').value = entry[3];
     document.getElementById('motorEnd').value = entry[4];
     
-    document.getElementById('wine').value = entry[8];
-    document.getElementById('remarks').value = entry[9];
+    document.getElementById('wine').value = entry[5];
+    document.getElementById('remarks').value = entry[6];
 
     document.getElementById('saveBtn').innerText = "Änderung speichern";
     document.getElementById('cancelEditBtn').classList.remove('d-none');
@@ -588,17 +602,19 @@
       liters: document.getElementById('costLiters').value,
       pricePerLiter: document.getElementById('costPricePerLiter').value
     };
+    const isUpdate = Boolean(data.id);
     google.script.run
       .withSuccessHandler(() => {
         resetCostForm();
         loadData();
         button.disabled = false;
         button.innerText = 'Kosten speichern';
+        showNotice(isUpdate ? 'Kosten aktualisiert.' : 'Kosten gespeichert.');
       })
       .withFailureHandler(error => {
         button.disabled = false;
         button.innerText = 'Kosten speichern';
-        alert('Kosten konnten nicht gespeichert werden: ' + error.message);
+        showNotice('Kosten konnten nicht gespeichert werden: ' + error.message, 'danger');
       })
       .saveOrUpdateCost(data);
   };
@@ -850,8 +866,8 @@ function generatePDF(btn) {
                   <small style="color: #666;">Dauer: ${duration}</small>
                 </td>
                 <td style="padding: 8px; border: 1px solid #ddd;">${row[3]} - ${row[4]}h</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${row[11]}°C, ${row[10]}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; font-style: italic;">${row[9] || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${row[8]}°C, ${row[7]}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-style: italic;">${row[6] || '-'}</td>
               </tr>
             `;
           }).join('')}

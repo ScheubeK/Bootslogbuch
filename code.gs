@@ -1,7 +1,7 @@
 const SHEET_NAME = "Logbuch";
 const COST_SHEET_NAME = "Kosten";
 const BOAT_NAME_PROPERTY = "BOAT_NAME";
-const LOG_HEADERS = ["ID", "Start", "Ende", "Motor Start", "Motor Ende", "Getankt", "Liter", "Preis/L", "Wein", "Bemerkungen", "Wetter", "Temp", "Wind"];
+const LOG_HEADERS = ["ID", "Start", "Ende", "Motor Start", "Motor Ende", "Wein", "Bemerkungen", "Wetter", "Temp", "Wind"];
 const COST_HEADERS = ["ID", "Datum", "Kategorie", "Beschreibung", "Betrag (CHF)", "Liter", "Preis/Liter"];
 const COST_CATEGORIES = ["Benzin", "Versicherungen", "Steuern", "Bootsplatz", "Unterhalt"];
 
@@ -41,8 +41,22 @@ function setupSheet() {
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(LOG_HEADERS);
-    sheet.getRange("A1:M1").setFontWeight("bold").setBackground("#e0e0e0");
   }
+  migrateLegacyLogSheet(sheet);
+  sheet.getRange("A1:J1").setFontWeight("bold").setBackground("#e0e0e0");
+  sheet.setFrozenRows(1);
+}
+
+function migrateLegacyLogSheet(sheet) {
+  const legacyHeaders = ["Getankt", "Liter", "Preis/L"];
+  const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getDisplayValues()[0];
+  const hasLegacyFuelColumns = legacyHeaders.every((header, index) => headers[index + 5] === header);
+  if (hasLegacyFuelColumns) {
+    // Die Spalten liegen zwischen Motor Ende und Wein. Das Löschen verschiebt
+    // die vorhandenen Wein-, Bemerkungs- und Wetterwerte automatisch korrekt.
+    sheet.deleteColumns(6, 3);
+  }
+  sheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]);
 }
 
 function getLastEngineHours() {
@@ -118,9 +132,6 @@ function saveOrUpdateEntry(data) {
     data.endDateTime,
     Number(data.motorStart),
     Number(data.motorEnd),
-    "Nein",
-    0,
-    0,
     Number(data.wine) || 0,
     data.remarks,
     wetter,
@@ -131,7 +142,7 @@ function saveOrUpdateEntry(data) {
   if (!isNew) {
     for (let i = 1; i < values.length; i++) {
       if (values[i][0].toString() === data.id.toString()) {
-        sheet.getRange(i + 1, 1, 1, 13).setValues([rowData]);
+        sheet.getRange(i + 1, 1, 1, LOG_HEADERS.length).setValues([rowData]);
         return "aktualisiert";
       }
     }
@@ -141,6 +152,7 @@ function saveOrUpdateEntry(data) {
 }
 
 function getLogData() {
+  setupSheet();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Logbuch");
   const data = sheet.getDataRange().getValues();
   const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
@@ -182,7 +194,7 @@ function resetSheet(sheetName, headers, headerRange) {
 }
 
 function resetAllData() {
-  resetSheet(SHEET_NAME, LOG_HEADERS, "A1:M1");
+  resetSheet(SHEET_NAME, LOG_HEADERS, "A1:J1");
   resetSheet(COST_SHEET_NAME, COST_HEADERS, "A1:G1");
   return true;
 }

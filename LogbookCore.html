@@ -15,15 +15,11 @@ window.LogbookCore = window.LogbookCore || (() => {
     return rows.reduce((metrics, row) => {
       const motorStart = numberOrZero(row[3]);
       const motorEnd = numberOrZero(row[4]);
-      const liters = numberOrZero(row[6]);
-      const pricePerLiter = numberOrZero(row[7]);
       const start = validDate(row[1]);
       const end = validDate(row[2]);
 
       metrics.engineHours += motorEnd - motorStart;
-      metrics.fuelLiters += liters;
-      metrics.fuelCost += liters * pricePerLiter;
-      metrics.wine += numberOrZero(row[8]);
+      metrics.wine += numberOrZero(row[5]);
 
       if (start && end) {
         const duration = end - start;
@@ -34,8 +30,6 @@ window.LogbookCore = window.LogbookCore || (() => {
     }, {
       trips: rows.length,
       engineHours: 0,
-      fuelLiters: 0,
-      fuelCost: 0,
       wine: 0,
       seaTimeMilliseconds: 0,
       seaTimeHours: 0

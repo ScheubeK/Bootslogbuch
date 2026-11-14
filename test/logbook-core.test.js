@@ -16,16 +16,14 @@ const LogbookCore = loadCore();
 
 test('berechnet die Dashboard-Kennzahlen aus gültigen und unvollständigen Fahrten', () => {
   const rows = [
-    ['1', '2026-06-15T09:00', '2026-06-15T10:30', 100, 101.5, 'Ja', 20, 1.8, 2],
-    ['2', '2026-06-16T12:00', '2026-06-16T12:30', '101.5', '102', 'Nein', '', '', '1'],
-    ['3', 'ungültig', '2026-06-16T14:00', 'foo', 103, 'Nein', 5, 2, '']
+    ['1', '2026-06-15T09:00', '2026-06-15T10:30', 100, 101.5, 2],
+    ['2', '2026-06-16T12:00', '2026-06-16T12:30', '101.5', '102', '1'],
+    ['3', 'ungültig', '2026-06-16T14:00', 'foo', 103, '']
   ];
 
   assert.deepEqual({ ...LogbookCore.calculateDashboard(rows) }, {
     trips: 3,
     engineHours: 105,
-    fuelLiters: 25,
-    fuelCost: 46,
     wine: 3,
     seaTimeMilliseconds: 7200000,
     seaTimeHours: 2

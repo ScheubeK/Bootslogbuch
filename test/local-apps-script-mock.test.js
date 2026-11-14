@@ -41,18 +41,15 @@ test('lokaler Apps-Script-Adapter speichert und lädt einen Eintrag', async () =
     endDateTime: '2026-06-15T10:00',
     motorStart: '10',
     motorEnd: '11',
-    refueled: true,
-    liters: '12.5',
-    pricePerLiter: '1.80',
     wine: '1',
     remarks: 'Lokaler Test'
   });
 
   const entries = await call(runner, 'getLogData');
   assert.equal(entries.length, 1);
-  assert.equal(entries[0][5], 'Nein');
-  assert.equal(entries[0][6], 0);
-  assert.equal(entries[0][10], 'Lokaler Testmodus');
+  assert.equal(entries[0][5], 1);
+  assert.equal(entries[0][6], 'Lokaler Test');
+  assert.equal(entries[0][7], 'Lokaler Testmodus');
 });
 
 test('lokaler Apps-Script-Adapter speichert Kosten und liefert Kostenjahre', async () => {

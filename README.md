@@ -5,6 +5,12 @@ Bootslogbuch. Die Daten liegen in den Tabellenblättern `Logbuch` und `Kosten`
 des gebundenen Google Sheets. Das Kostenblatt wird beim ersten Aufruf automatisch
 erstellt.
 
+Das Tabellenblatt `Logbuch` verwendet zehn Spalten: `ID`, `Start`, `Ende`,
+`Motor Start`, `Motor Ende`, `Wein`, `Bemerkungen`, `Wetter`, `Temp` und
+`Wind`. Beim ersten Aufruf entfernt das Script bei älteren Ständen die drei
+Altspalten `Getankt`, `Liter` und `Preis/L` automatisch; vorhandene Daten in
+den nachfolgenden Spalten bleiben dabei erhalten.
+
 ## Kostenmodul
 
 Kosten werden unabhängig von Fahrten erfasst und sind nach Jahr filterbar. Die
