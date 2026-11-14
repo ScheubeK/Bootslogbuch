@@ -40,6 +40,16 @@
     .bg-wine { background: linear-gradient(45deg, #e74a3b, #be2617); }
     .bg-cost { background: linear-gradient(45deg, #36b9cc, #258391); }
     .trip-remarks { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .cost-history-chart { width: 100%; overflow-x: auto; }
+    .cost-history-chart svg { display: block; width: 100%; min-width: 300px; height: auto; }
+    .cost-history-grid { stroke: #e9ecef; stroke-width: 1; }
+    .cost-history-axis { stroke: #adb5bd; stroke-width: 1.25; }
+    .cost-history-line { fill: none; stroke: #258391; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .cost-history-point { fill: #258391; stroke: white; stroke-width: 2; }
+    .cost-history-point.is-selected { fill: #224abe; stroke: #dbe5ff; stroke-width: 3; }
+    .cost-history-label { fill: #6c757d; font-size: 10px; }
+    .cost-history-year-label { fill: #343a40; font-size: 12px; font-weight: 700; }
+    .cost-history-value-label { fill: #343a40; font-size: 10px; font-weight: 600; }
     .nav-pills .nav-link { font-size: 0.82rem; padding-left: 0.25rem; padding-right: 0.25rem; }
     .nav-pills .nav-link.active { background-color: #0d6efd; box-shadow: 0 4px 10px rgba(13,110,253,0.3); }
     .btn-edit { color: #4e73df; cursor: pointer; }
@@ -183,6 +193,14 @@
       <div class="card shadow-sm border-0 p-3 mb-4">
         <div class="small text-muted mb-2">Kosten nach Kategorie</div>
         <div id="costBreakdown" class="row g-2 small"></div>
+      </div>
+
+      <div class="card shadow-sm border-0 p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="small text-muted">Kostenentwicklung</div>
+          <span class="badge text-bg-light">Alle Jahre</span>
+        </div>
+        <div id="costHistoryChart"></div>
       </div>
 
     </div>
@@ -475,6 +493,65 @@
     document.getElementById('costBreakdown').innerHTML = Object.entries(costs.byCategory)
       .map(([category, total]) => `<div class="col-6"><span class="text-muted">${category}</span><br><strong>${formatCurrency(total)}</strong></div>`)
       .join('');
+    renderCostHistory();
+  }
+
+  function renderCostHistory() {
+    const chart = document.getElementById('costHistoryChart');
+    const yearlyTotals = LogbookCore.calculateAnnualCostTotals(globalCostData);
+    if (!yearlyTotals.length) {
+      chart.innerHTML = '<div class="text-center text-muted small py-3">Noch keine Kosten für eine Jahresentwicklung vorhanden.</div>';
+      return;
+    }
+
+    const maxTotal = Math.max(...yearlyTotals.map(entry => entry.total), 1);
+    const magnitude = 10 ** Math.floor(Math.log10(maxTotal));
+    const normalizedMax = maxTotal / magnitude;
+    const axisMaximum = (normalizedMax <= 1 ? 1 : normalizedMax <= 2 ? 2 : normalizedMax <= 5 ? 5 : 10) * magnitude;
+    const chartWidth = 350;
+    const left = 58;
+    const right = 14;
+    const top = 20;
+    const bottom = 44;
+    const chartHeight = 220;
+    const plotWidth = chartWidth - left - right;
+    const plotHeight = chartHeight - top - bottom;
+    const xForIndex = index => yearlyTotals.length === 1
+      ? left + plotWidth / 2
+      : left + (plotWidth / (yearlyTotals.length - 1)) * index;
+    const yForTotal = total => top + plotHeight - (total / axisMaximum) * plotHeight;
+    const numberFormat = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
+    const ticks = Array.from({ length: 5 }, (_, index) => axisMaximum * index / 4);
+    const points = yearlyTotals.map(({ year, total }, index) => ({ year, total, x: xForIndex(index), y: yForTotal(total) }));
+    const linePoints = points.map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+
+    chart.innerHTML = `<div class="cost-history-chart">
+      <svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="Kurvendiagramm der Gesamtkosten nach Jahr">
+        <text class="cost-history-label" x="${left + plotWidth / 2}" y="${chartHeight - 5}" text-anchor="middle">Jahr</text>
+        <text class="cost-history-label" x="12" y="${top + plotHeight / 2}" text-anchor="middle" transform="rotate(-90 12 ${top + plotHeight / 2})">Kosten (CHF)</text>
+        ${ticks.map(total => {
+          const y = yForTotal(total);
+          return `<line class="cost-history-grid" x1="${left}" x2="${left + plotWidth}" y1="${y}" y2="${y}"></line>
+            <text class="cost-history-label" x="${left - 8}" y="${y + 3}" text-anchor="end">${numberFormat.format(total)}</text>`;
+        }).join('')}
+        <line class="cost-history-axis" x1="${left}" x2="${left + plotWidth}" y1="${top + plotHeight}" y2="${top + plotHeight}"></line>
+        <line class="cost-history-axis" x1="${left}" x2="${left}" y1="${top}" y2="${top + plotHeight}"></line>
+        ${points.map(point => `<text class="cost-history-year-label" x="${point.x}" y="${top + plotHeight + 19}" text-anchor="middle">${point.year}</text>`).join('')}
+        <polyline class="cost-history-line" points="${linePoints}"></polyline>
+        ${points.map(point => {
+          const isSelected = point.year === selectedYear;
+          const labelY = point.y < top + 20 ? point.y + 16 : point.y - 8;
+          const isFirstPoint = point.x < left + 35;
+          const isLastPoint = point.x > left + plotWidth - 35;
+          const labelX = isFirstPoint ? point.x + 7 : isLastPoint ? point.x - 7 : point.x;
+          const labelAnchor = isFirstPoint ? 'start' : isLastPoint ? 'end' : 'middle';
+          return `<circle class="cost-history-point${isSelected ? ' is-selected' : ''}" cx="${point.x}" cy="${point.y}" r="${isSelected ? 5.5 : 4}">
+              <title>${point.year}: ${formatCurrency(point.total)}</title>
+            </circle>
+            <text class="cost-history-value-label" x="${labelX}" y="${labelY}" text-anchor="${labelAnchor}">${numberFormat.format(point.total)}</text>`;
+        }).join('')}
+      </svg>
+    </div>`;
   }
 
   function renderTripList(data) {

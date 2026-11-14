@@ -58,3 +58,17 @@ test('fasst Kosten nur in den erlaubten Kategorien zusammen', () => {
   assert.equal(summary.byCategory.Unterhalt, 2010.44);
   assert.equal(summary.byCategory.Steuern, 0);
 });
+
+test('gruppiert Gesamtkosten nach Jahr und verarbeitet Komma-Dezimalwerte', () => {
+  const totals = LogbookCore.calculateAnnualCostTotals([
+    ['1', '2025-05-10', 'Benzin', 'Tankstelle', '80,10'],
+    ['2', '2024-01-15', 'Bootsplatz', 'Jahresgebühr', '2\'174,00'],
+    ['3', '2025-03-01', 'Unterhalt', 'Service', '99,90'],
+    ['4', '2025-03-02', 'Unbekannt', 'Nicht zählen', '100,00']
+  ]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(totals)), [
+    { year: '2024', total: 2174 },
+    { year: '2025', total: 180 }
+  ]);
+});

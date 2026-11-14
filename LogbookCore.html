@@ -1,8 +1,22 @@
 // Reine Berechnungen ohne Browser- oder Google-Apps-Script-Abhängigkeit.
 // Sie werden in Index.html eingebunden und können lokal mit node --test geprüft werden.
 window.LogbookCore = window.LogbookCore || (() => {
+  const COST_CATEGORIES = Object.freeze({
+    Benzin: true,
+    Versicherungen: true,
+    Steuern: true,
+    Bootsplatz: true,
+    Unterhalt: true
+  });
+
   function numberOrZero(value) {
-    const number = Number.parseFloat(value);
+    const compactValue = typeof value === 'string'
+      ? value.trim().replace(/[’'\s]/g, '')
+      : value;
+    const normalizedValue = typeof compactValue === 'string' && compactValue.includes(',')
+      ? compactValue.replace(/\./g, '').replace(',', '.')
+      : compactValue;
+    const number = Number.parseFloat(normalizedValue);
     return Number.isFinite(number) ? number : 0;
   }
 
@@ -71,11 +85,27 @@ window.LogbookCore = window.LogbookCore || (() => {
     };
   }
 
+  function calculateAnnualCostTotals(rows) {
+    const totalsByYear = {};
+    rows.forEach(row => {
+      const year = String(row[1] || '').slice(0, 4);
+      const category = row[2];
+      if (!/^\d{4}$/.test(year) || !Object.prototype.hasOwnProperty.call(COST_CATEGORIES, category)) return;
+
+      totalsByYear[year] = (totalsByYear[year] || 0) + numberOrZero(row[4]);
+    });
+
+    return Object.entries(totalsByYear)
+      .sort(([yearA], [yearB]) => Number(yearA) - Number(yearB))
+      .map(([year, total]) => ({ year, total }));
+  }
+
   return Object.freeze({
     calculateDashboard(rows) {
       return withSeaTimeHours(calculateDashboard(rows));
     },
     calculateCostSummary,
+    calculateAnnualCostTotals,
     formatDuration
   });
 })();
