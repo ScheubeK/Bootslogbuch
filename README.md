@@ -28,6 +28,7 @@ Supabase **SQL Editor** ausgeführt:
 2. `202611170002_protect_boat_owners.sql`
 3. `202611170003_active_trips.sql`
 4. `202611170004_boat_weather_location.sql`
+5. `202611170005_reset_boat_data.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige

@@ -83,6 +83,7 @@ function registerEvents() {
   element('inviteForm').addEventListener('submit', createInvitation);
   element('weatherSettingsForm').addEventListener('submit', saveWeatherLocation);
   element('exportCsvButton').addEventListener('click', exportCsv);
+  element('resetDataButton').addEventListener('click', resetBoatData);
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
     syncYearSelectors();
@@ -370,10 +371,25 @@ function renderWeatherSettings() {
   if (!state.boat) return;
   const isOwner = state.role === 'owner';
   element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
+  element('resetDataCard').classList.toggle('d-none', !isOwner);
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
     ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
     : 'Der Wetterort wird vom Kapitän verwaltet.';
+}
+
+async function resetBoatData(event) {
+  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann das Logbuch löschen.', 'danger');
+  if (!confirm(`Wirklich alle Ausflüge und Kosten von „${state.boat.name}“ löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+  const button = event.currentTarget;
+  setBusy(button, true, 'Wird gelöscht…');
+  const { error } = await state.client.rpc('reset_boat_data', { target_boat_id: state.boat.id });
+  setBusy(button, false, 'Logbuch und Kosten löschen');
+  if (error) return showNotice(error.message, 'danger');
+  state.activeTrip = null;
+  state.finishingLiveTrip = false;
+  await loadBoatData();
+  showNotice('Logbuch und Kosten wurden gelöscht.');
 }
 
 async function saveWeatherLocation(event) {
