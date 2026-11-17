@@ -248,34 +248,38 @@ function renderAll() {
 
 function currentTrips() { return state.trips.filter(trip => dateYear(trip.start_at) === state.selectedYear); }
 function currentCosts() { return state.costs.filter(cost => dateYear(cost.cost_date) === state.selectedYear); }
+function seaHours(trips) { return trips.reduce((sum, trip) => sum + Math.max(0, new Date(trip.end_at) - new Date(trip.start_at)), 0) / 3600000; }
+function dashboardComparison(current, previous, formatValue) {
+  if (!previous) return 'Vorjahr: –';
+  const difference = current - previous;
+  const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
+  const percentSign = difference >= 0 ? '+' : '−';
+  return `Vorjahr: ${sign}${formatValue(Math.abs(difference))} (${percentSign}${Math.abs(difference / previous * 100).toFixed(0)} %)`;
+}
 
 function renderDashboard() {
   const trips = currentTrips();
   const costs = currentCosts();
   const engineHours = trips.reduce((sum, trip) => sum + numberOrZero(trip.engine_end) - numberOrZero(trip.engine_start), 0);
-  const seaTime = trips.reduce((sum, trip) => sum + Math.max(0, new Date(trip.end_at) - new Date(trip.start_at)), 0) / 3600000;
+  const seaTime = seaHours(trips);
   const wine = trips.reduce((sum, trip) => sum + numberOrZero(trip.wine_bottles), 0);
   const totals = Object.fromEntries(categories.map(category => [category, 0]));
   costs.forEach(cost => { if (totals[cost.category] !== undefined) totals[cost.category] += numberOrZero(cost.amount_chf); });
   const totalCosts = Object.values(totals).reduce((sum, total) => sum + total, 0);
-  const fuelCosts = costs.filter(cost => cost.category === 'Benzin');
-  const fuelLitres = fuelCosts.reduce((sum, cost) => sum + numberOrZero(cost.litres), 0);
-  const fuelTotal = fuelCosts.reduce((sum, cost) => sum + numberOrZero(cost.amount_chf), 0);
   const previousYear = String(Number(state.selectedYear) - 1);
   const previousCosts = state.costs.filter(cost => dateYear(cost.cost_date) === previousYear).reduce((sum, cost) => sum + numberOrZero(cost.amount_chf), 0);
+  const previousTrips = state.trips.filter(trip => dateYear(trip.start_at) === previousYear);
+  const previousSeaTime = seaHours(previousTrips);
   element('metricTrips').textContent = trips.length;
   element('metricEngine').textContent = engineHours.toFixed(1).replace('.', ',');
   element('metricSeaTime').textContent = `${seaTime.toFixed(1).replace('.', ',')} h`;
   element('metricWine').textContent = `${wine} Fl.`;
   element('metricCost').textContent = formatCurrency(totalCosts);
   element('metricCostPerEngine').textContent = engineHours > 0 ? `${formatCurrency(totalCosts / engineHours)}/h` : '–';
-  element('metricFuel').textContent = fuelLitres > 0 ? `${fuelLitres.toFixed(1).replace('.', ',')} L · ${formatCurrency(fuelTotal / fuelLitres)}/L` : '0 L';
-  if (!previousCosts) element('metricCostComparison').textContent = 'Keine Kosten im Vorjahr';
-  else {
-    const difference = totalCosts - previousCosts;
-    const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
-    element('metricCostComparison').textContent = `Zum Vorjahr: ${sign}${formatCurrency(Math.abs(difference))} (${difference / previousCosts * 100 >= 0 ? '+' : '−'}${Math.abs(difference / previousCosts * 100).toFixed(0)} %)`;
-  }
+  element('metricCostPerTrip').textContent = trips.length ? formatCurrency(totalCosts / trips.length) : '–';
+  element('metricTripsComparison').textContent = dashboardComparison(trips.length, previousTrips.length, value => String(value));
+  element('metricSeaTimeComparison').textContent = dashboardComparison(seaTime, previousSeaTime, value => `${value.toFixed(1).replace('.', ',')} h`);
+  element('metricCostComparison').textContent = dashboardComparison(totalCosts, previousCosts, formatCurrency);
   element('costBreakdown').innerHTML = categories.map(category => `<div class="col-6"><div class="small text-secondary">${category}</div><strong>${formatCurrency(totals[category])}</strong></div>`).join('');
   renderTrend();
 }
