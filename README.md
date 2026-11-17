@@ -27,12 +27,18 @@ Supabase **SQL Editor** ausgeführt:
 1. `202611170001_initial_schema.sql`
 2. `202611170002_protect_boat_owners.sql`
 3. `202611170003_active_trips.sql`
+4. `202611170004_boat_weather_location.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
 Owner-Rolle versehentlich löscht. Die dritte speichert den Startzeitpunkt eines
 laufenden Ausflugs separat, damit er nach iPhone-Sleep oder einem Neustart der
 App erhalten bleibt.
+
+Der Wetterort eines Boots ist standardmässig **Hergiswil NW, Schweiz**. Der
+Kapitän kann ihn in den Settings ändern; neue Ausflüge übernehmen Wetter,
+Temperatur und Wind automatisch von Open-Meteo. Es wird kein API-Schlüssel
+benötigt.
 
 ## Anmeldung konfigurieren
 
@@ -108,6 +114,7 @@ verwendet.
 - Ausflüge und Kosten erfassen, bearbeiten und löschen
 - Jahresdashboard mit Kostenentwicklung
 - fortsetzbarer Live-Ausflug mit serverseitig gespeichertem Startzeitpunkt
+- frei wählbarer Wetterort und automatische Wetterdaten bei neuen Ausflügen
 - Crew-Einladungen als sicherer Link zum Kopieren und Versenden
 - CSV-Export aller Ausflüge und Kosten eines Boots
 

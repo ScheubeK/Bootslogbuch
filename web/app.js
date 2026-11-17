@@ -10,12 +10,16 @@ const state = {
   costs: [],
   activeTrip: null,
   finishingLiveTrip: false,
+  weatherRequestId: 0,
   selectedYear: String(new Date().getFullYear())
 };
 
 const categories = ['Benzin', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt'];
 const money = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' });
 const number = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
+const defaultWeatherLocation = 'Hergiswil NW, Schweiz';
+const defaultWeatherCoordinates = { lat: 46.98515, lon: 8.30956 };
+const weatherDescriptions = { 0: 'Klar', 1: 'Meist klar', 2: 'Teilweise bewölkt', 3: 'Bedeckt', 45: 'Neblig', 48: 'Reifnebel', 51: 'Leichter Nieselregen', 53: 'Nieselregen', 55: 'Starker Nieselregen', 56: 'Gefrierender Nieselregen', 57: 'Starker gefrierender Nieselregen', 61: 'Leichter Regen', 63: 'Regen', 65: 'Starker Regen', 66: 'Gefrierender Regen', 67: 'Starker gefrierender Regen', 71: 'Leichter Schneefall', 73: 'Schneefall', 75: 'Starker Schneefall', 77: 'Schneekörner', 80: 'Regenschauer', 81: 'Starke Regenschauer', 82: 'Heftige Regenschauer', 85: 'Schneeschauer', 86: 'Starke Schneeschauer', 95: 'Gewitter', 96: 'Gewitter mit Hagel', 99: 'Starkes Gewitter mit Hagel' };
 
 const element = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
@@ -29,6 +33,14 @@ const numberOrZero = value => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const dateYear = value => String(value || '').slice(0, 4);
+const boatFromMembership = membership => ({
+  id: membership.boat_id,
+  role: membership.role,
+  name: Array.isArray(membership.boats) ? membership.boats[0]?.name : membership.boats?.name,
+  weatherLocation: defaultWeatherLocation,
+  weatherLat: defaultWeatherCoordinates.lat,
+  weatherLon: defaultWeatherCoordinates.lon
+});
 
 document.addEventListener('DOMContentLoaded', initialize);
 
@@ -69,6 +81,7 @@ function registerEvents() {
   element('wineSwitch').addEventListener('change', event => setWineEnabled(event.target.checked));
   document.querySelectorAll('[data-wine]').forEach(button => button.addEventListener('click', () => setWine(Number(button.dataset.wine))));
   element('inviteForm').addEventListener('submit', createInvitation);
+  element('weatherSettingsForm').addEventListener('submit', saveWeatherLocation);
   element('exportCsvButton').addEventListener('click', exportCsv);
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
@@ -132,13 +145,10 @@ async function loadProfileAndBoats() {
   ]);
   if (profileError || membershipError) return showNotice((profileError || membershipError).message, 'danger');
   state.profile = profile;
-  state.boats = (memberships || []).map(membership => ({
-    id: membership.boat_id,
-    role: membership.role,
-    name: Array.isArray(membership.boats) ? membership.boats[0]?.name : membership.boats?.name
-  })).filter(boat => boat.name);
+  state.boats = (memberships || []).map(boatFromMembership).filter(boat => boat.name);
 
   await acceptInvitationFromUrl();
+  await loadWeatherSettings();
   if (!state.boats.length) return showScreen('setupScreen');
 
   const storedBoatId = localStorage.getItem(`bootslogbuch.boat.${state.user.id}`);
@@ -159,11 +169,22 @@ async function acceptInvitationFromUrl() {
   }
   showNotice('Crew-Einladung angenommen. Willkommen an Bord!');
   const { data: memberships } = await state.client.from('boat_memberships').select('boat_id, role, boats(id, name)').eq('user_id', state.user.id);
-  state.boats = (memberships || []).map(membership => ({
-    id: membership.boat_id,
-    role: membership.role,
-    name: Array.isArray(membership.boats) ? membership.boats[0]?.name : membership.boats?.name
-  })).filter(boat => boat.name);
+  state.boats = (memberships || []).map(boatFromMembership).filter(boat => boat.name);
+}
+
+async function loadWeatherSettings() {
+  if (!state.boats.length) return;
+  const { data, error } = await state.client.from('boats').select('id, weather_location, weather_lat, weather_lon').in('id', state.boats.map(boat => boat.id));
+  // Migration 004 may not yet have been executed; the default remains usable.
+  if (error) return;
+  const settings = new Map((data || []).map(boat => [boat.id, boat]));
+  state.boats.forEach(boat => {
+    const value = settings.get(boat.id);
+    if (!value) return;
+    boat.weatherLocation = value.weather_location || defaultWeatherLocation;
+    boat.weatherLat = Number(value.weather_lat) || defaultWeatherCoordinates.lat;
+    boat.weatherLon = Number(value.weather_lon) || defaultWeatherCoordinates.lon;
+  });
 }
 
 async function createBoat(event) {
@@ -217,6 +238,7 @@ function renderAll() {
   renderTrips();
   renderCosts();
   renderLiveTrip();
+  renderWeatherSettings();
   renderCrew();
 }
 
@@ -288,14 +310,14 @@ function localDateTime(value) {
 }
 
 function renderLiveTrip() {
-  const isActive = Boolean(state.activeTrip);
-  element('liveTripCard').classList.toggle('is-active', isActive);
-  element('livePropeller').classList.toggle('d-none', !isActive);
-  element('liveTripSwitch').checked = isActive;
-  element('liveTripStatus').textContent = isActive ? 'Ausflug läuft… ⛵' : 'Bereit zum Ablegen…';
-  element('liveTripHint').textContent = isActive
+  const isRunning = Boolean(state.activeTrip) && !state.finishingLiveTrip;
+  element('liveTripCard').classList.toggle('is-active', isRunning);
+  element('livePropeller').classList.toggle('d-none', !isRunning);
+  element('liveTripSwitch').checked = isRunning;
+  element('liveTripStatus').textContent = isRunning ? 'Ausflug läuft…' : state.activeTrip ? 'Ausflug beenden und speichern…' : 'Bereit zum Ablegen…';
+  element('liveTripHint').textContent = isRunning
     ? `Gestartet am ${new Date(state.activeTrip.started_at).toLocaleString('de-CH')}. Zum Beenden den Schalter ausschalten.`
-    : 'Startzeit wird sicher gespeichert.';
+    : state.activeTrip ? 'Bitte Motorstunden und weitere Angaben ergänzen, dann speichern.' : 'Startzeit wird sicher gespeichert.';
 }
 
 async function toggleLiveTrip(event) {
@@ -321,9 +343,7 @@ async function toggleLiveTrip(event) {
   resetTripForm(true);
   element('tripStart').value = localDateTime(state.activeTrip.started_at);
   element('tripEnd').value = localDateTime(new Date());
-  element('liveTripStatus').textContent = 'Ausflug beenden und speichern…';
-  element('liveTripHint').textContent = 'Bitte Motorstunden und weitere Angaben ergänzen, dann speichern.';
-  element('liveTripSwitch').checked = false;
+  renderLiveTrip();
 }
 
 function setWineEnabled(enabled) {
@@ -341,9 +361,71 @@ function setWine(value) {
   element('wineLabel').textContent = wine ? `${wine} ${wine === 1 ? 'Flasche' : 'Flaschen'}` : '';
 }
 
-function resetTripForm(show) {
+function renderWeatherSettings() {
+  if (!state.boat) return;
+  const isOwner = state.role === 'owner';
+  element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
+  element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
+  element('weatherSettingsHint').textContent = isOwner
+    ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
+    : 'Der Wetterort wird vom Kapitän verwaltet.';
+}
+
+async function saveWeatherLocation(event) {
+  event.preventDefault();
+  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann den Wetterort ändern.', 'danger');
+  const button = event.currentTarget.querySelector('button');
+  const query = element('weatherLocation').value.trim();
+  if (!query) return;
+  setBusy(button, true, 'Ort wird gesucht…');
+  try {
+    const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=de&format=json`);
+    if (!response.ok) throw new Error('Der Wetterort konnte nicht gesucht werden.');
+    const result = (await response.json()).results?.[0];
+    if (!result) throw new Error('Kein passender Wetterort gefunden.');
+    const location = [result.name, result.admin1, result.country].filter((value, index, values) => value && values.indexOf(value) === index).join(', ');
+    const values = { weather_location: location, weather_lat: result.latitude, weather_lon: result.longitude };
+    const { error } = await state.client.from('boats').update(values).eq('id', state.boat.id);
+    if (error) {
+      if (error.code === '42703') throw new Error('Wetterort ist noch nicht eingerichtet. Bitte zuerst Migration 004 ausführen.');
+      throw error;
+    }
+    Object.assign(state.boat, { weatherLocation: location, weatherLat: result.latitude, weatherLon: result.longitude });
+    const savedBoat = state.boats.find(boat => boat.id === state.boat.id);
+    if (savedBoat) Object.assign(savedBoat, state.boat);
+    renderWeatherSettings();
+    showNotice(`Wetterort gespeichert: ${location}.`);
+  } catch (error) {
+    showNotice(error.message || 'Wetterort konnte nicht gespeichert werden.', 'danger');
+  } finally {
+    setBusy(button, false, 'Speichern');
+  }
+}
+
+async function loadCurrentWeather() {
+  const requestId = ++state.weatherRequestId;
+  const status = element('weatherAutoStatus');
+  status.textContent = `Wetter für ${state.boat.weatherLocation || defaultWeatherLocation} wird geladen…`;
+  try {
+    const latitude = state.boat.weatherLat || defaultWeatherCoordinates.lat;
+    const longitude = state.boat.weatherLon || defaultWeatherCoordinates.lon;
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh&timezone=auto`);
+    if (!response.ok) throw new Error('Wetterdaten nicht verfügbar.');
+    const current = (await response.json()).current;
+    if (!current || requestId !== state.weatherRequestId || element('tripId').value) return;
+    if (!element('tripWeather').value) element('tripWeather').value = weatherDescriptions[current.weather_code] || 'Unbekannt';
+    if (!element('tripTemperature').value) element('tripTemperature').value = current.temperature_2m;
+    if (!element('tripWind').value) element('tripWind').value = current.wind_speed_10m;
+    status.textContent = `Wetter automatisch übernommen · ${state.boat.weatherLocation || defaultWeatherLocation}`;
+  } catch (_) {
+    if (requestId === state.weatherRequestId) status.textContent = 'Wetterdaten konnten nicht automatisch geladen werden.';
+  }
+}
+
+function resetTripForm(show, withWeather = true) {
   element('tripForm').classList.toggle('d-none', !show);
   if (!show) {
+    state.weatherRequestId += 1;
     element('tripForm').reset();
     element('tripId').value = '';
     state.finishingLiveTrip = false;
@@ -359,6 +441,8 @@ function resetTripForm(show) {
   element('tripEngineStart').value = state.trips[0]?.engine_end ?? 0;
   element('tripEngineEnd').value = state.trips[0]?.engine_end ?? 0;
   setWine(0);
+  element('weatherAutoStatus').textContent = '';
+  if (withWeather) loadCurrentWeather();
   element('tripForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -386,7 +470,7 @@ async function saveTrip(event) {
 
 window.editTrip = id => {
   const trip = state.trips.find(item => item.id === id); if (!trip) return;
-  resetTripForm(true); element('tripId').value = trip.id;
+  resetTripForm(true, false); element('tripId').value = trip.id;
   element('tripStart').value = localDateTime(trip.start_at); element('tripEnd').value = localDateTime(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; setWine(trip.wine_bottles); element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
 };
 window.deleteTrip = async id => { if (!confirm('Diesen Ausflug wirklich löschen?')) return; const { error } = await state.client.from('trips').delete().eq('id', id); if (error) return showNotice(error.message, 'danger'); await loadBoatData(); showNotice('Ausflug gelöscht.'); };
