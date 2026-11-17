@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d6efd">
+  <title>Bootslogbuch</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="./styles.css" rel="stylesheet">
+</head>
+<body>
+  <main class="container app-shell py-3">
+    <div id="notice" class="alert d-none" role="alert"></div>
+
+    <section id="loadingScreen" class="text-center py-5">
+      <div class="spinner-border text-primary" aria-label="Lädt"></div>
+    </section>
+
+    <section id="loginScreen" class="auth-card card shadow-sm border-0 d-none">
+      <div class="card-body p-4 p-sm-5">
+        <div class="text-center mb-4">
+          <div class="app-icon"><i class="bi bi-anchor-fill"></i></div>
+          <h1 class="h3 mt-3 mb-2">Bootslogbuch</h1>
+          <p class="text-secondary mb-0">Dein gemeinsames Logbuch für Boot und Crew.</p>
+        </div>
+        <form id="loginForm">
+          <label class="form-label" for="loginEmail">E-Mail-Adresse</label>
+          <input id="loginEmail" class="form-control form-control-lg" type="email" autocomplete="email" required placeholder="name@beispiel.ch">
+          <button class="btn btn-primary btn-lg w-100 mt-3" type="submit">Login-Link senden</button>
+        </form>
+        <p class="small text-secondary text-center mt-3 mb-0">Kein Passwort nötig: Du erhältst einen sicheren Link per E-Mail.</p>
+      </div>
+    </section>
+
+    <section id="setupScreen" class="auth-card card shadow-sm border-0 d-none">
+      <div class="card-body p-4 p-sm-5">
+        <div class="text-center mb-4">
+          <div class="app-icon"><i class="bi bi-water"></i></div>
+          <h1 class="h3 mt-3 mb-2">Willkommen an Bord</h1>
+          <p class="text-secondary mb-0">Lege dein erstes Boot an. Du wirst automatisch Kapitän und kannst danach deine Crew einladen.</p>
+        </div>
+        <form id="createBoatForm">
+          <label class="form-label" for="boatName">Bootsname</label>
+          <input id="boatName" class="form-control form-control-lg" maxlength="80" required placeholder="z. B. Seestern">
+          <button class="btn btn-primary btn-lg w-100 mt-3" type="submit">Boot anlegen</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="appScreen" class="d-none">
+      <header class="d-flex justify-content-between align-items-center gap-2 mb-3">
+        <div class="d-flex align-items-center gap-2 overflow-hidden">
+          <div class="app-icon app-icon-small"><i class="bi bi-anchor-fill"></i></div>
+          <div class="overflow-hidden">
+            <h1 class="h4 mb-0 text-truncate" id="boatTitle">Bootslogbuch</h1>
+            <span class="small text-secondary" id="userLabel"></span>
+          </div>
+        </div>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="dropdown" aria-label="Menü"><i class="bi bi-three-dots-vertical"></i></button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" id="switchBoatButton"><i class="bi bi-arrow-left-right me-2"></i>Boot wechseln</button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item text-danger" id="signOutButton"><i class="bi bi-box-arrow-right me-2"></i>Abmelden</button></li>
+          </ul>
+        </div>
+      </header>
+
+      <nav class="nav nav-pills nav-fill app-nav mb-4" id="mainNav">
+        <button class="nav-link active" data-view="dashboard"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
+        <button class="nav-link" data-view="trips"><i class="bi bi-compass"></i><span>Ausflüge</span></button>
+        <button class="nav-link" data-view="costs"><i class="bi bi-cash-stack"></i><span>Kosten</span></button>
+        <button class="nav-link" data-view="crew"><i class="bi bi-people"></i><span>Crew</span></button>
+      </nav>
+
+      <section id="dashboardView" class="app-view">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Jahresübersicht</h2>
+          <select class="form-select form-select-sm year-select" id="dashboardYear"></select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><div class="metric-card bg-trips"><i class="bi bi-compass"></i><span>Ausflüge</span><strong id="metricTrips">0</strong></div></div>
+          <div class="col-6"><div class="metric-card bg-engine"><i class="bi bi-gear-wide-connected"></i><span>Motor (h)</span><strong id="metricEngine">0,0</strong></div></div>
+          <div class="col-6"><div class="metric-card bg-sea"><i class="bi bi-clock-history"></i><span>Zeit auf See</span><strong id="metricSeaTime">0,0 h</strong></div></div>
+          <div class="col-6"><div class="metric-card bg-wine"><i class="bi bi-cup-straw"></i><span>Weinkonsum</span><strong id="metricWine">0 Fl.</strong></div></div>
+          <div class="col-12"><div class="metric-card bg-cost"><i class="bi bi-cash-stack"></i><span>Kosten Total</span><strong id="metricCost">CHF 0.00</strong></div></div>
+        </div>
+        <div class="card shadow-sm border-0 mb-3"><div class="card-body"><div class="small text-secondary mb-2">Kosten nach Kategorie</div><div class="row g-2" id="costBreakdown"></div></div></div>
+        <div class="card shadow-sm border-0"><div class="card-body"><div class="d-flex justify-content-between align-items-center mb-2"><div class="small text-secondary">Kostenentwicklung</div><span class="badge text-bg-light">Alle Jahre</span></div><div id="costTrend"></div></div></div>
+      </section>
+
+      <section id="tripsView" class="app-view d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Ausflüge</h2><select class="form-select form-select-sm year-select" id="tripsYear"></select></div>
+        <button class="btn btn-primary w-100 mb-3" id="showTripForm"><i class="bi bi-plus-lg me-1"></i>Ausflug erfassen</button>
+        <form id="tripForm" class="card shadow-sm border-0 mb-3 d-none"><div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h6 mb-0">Ausflug</h3><button class="btn-close" type="button" id="cancelTripForm" aria-label="Schließen"></button></div>
+          <input id="tripId" type="hidden">
+          <div class="row g-3"><div class="col-6"><label class="form-label small">Start</label><input id="tripStart" class="form-control" type="datetime-local" required></div><div class="col-6"><label class="form-label small">Ende</label><input id="tripEnd" class="form-control" type="datetime-local" required></div><div class="col-6"><label class="form-label small">Motor Start</label><input id="tripEngineStart" class="form-control" type="number" min="0" step="0.1" required></div><div class="col-6"><label class="form-label small">Motor Ende</label><input id="tripEngineEnd" class="form-control" type="number" min="0" step="0.1" required></div><div class="col-6"><label class="form-label small">Wein (Flaschen)</label><input id="tripWine" class="form-control" type="number" min="0" max="99" step="1" value="0"></div><div class="col-6"><label class="form-label small">Wetter</label><input id="tripWeather" class="form-control" maxlength="80" placeholder="optional"></div><div class="col-6"><label class="form-label small">Temperatur °C</label><input id="tripTemperature" class="form-control" type="number" step="0.1" placeholder="optional"></div><div class="col-6"><label class="form-label small">Wind km/h</label><input id="tripWind" class="form-control" type="number" min="0" step="0.1" placeholder="optional"></div><div class="col-12"><label class="form-label small">Bemerkungen</label><textarea id="tripRemarks" class="form-control" rows="2"></textarea></div></div>
+          <button class="btn btn-primary w-100 mt-3" type="submit">Speichern</button>
+        </div></form>
+        <div id="tripList" class="vstack gap-2"></div>
+      </section>
+
+      <section id="costsView" class="app-view d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Kosten</h2><select class="form-select form-select-sm year-select" id="costsYear"></select></div>
+        <button class="btn btn-primary w-100 mb-3" id="showCostForm"><i class="bi bi-plus-lg me-1"></i>Kosten erfassen</button>
+        <form id="costForm" class="card shadow-sm border-0 mb-3 d-none"><div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h6 mb-0">Kostenposten</h3><button class="btn-close" type="button" id="cancelCostForm" aria-label="Schließen"></button></div>
+          <input id="costId" type="hidden">
+          <div class="row g-3"><div class="col-6"><label class="form-label small">Datum</label><input id="costDate" class="form-control" type="date" required></div><div class="col-6"><label class="form-label small">Kategorie</label><select id="costCategory" class="form-select" required><option>Benzin</option><option>Versicherungen</option><option>Steuern</option><option>Bootsplatz</option><option>Unterhalt</option></select></div><div class="col-12"><label class="form-label small">Beschreibung</label><input id="costDescription" class="form-control" maxlength="250" placeholder="optional"></div><div class="col-12"><label class="form-label small">Betrag (CHF)</label><input id="costAmount" class="form-control" type="number" min="0" step="0.01" required></div><div class="col-6 fuel-only"><label class="form-label small">Liter <span class="text-secondary">(optional)</span></label><input id="costLitres" class="form-control" type="number" min="0" step="0.01"></div><div class="col-6 fuel-only"><label class="form-label small">Preis/Liter <span class="text-secondary">(optional)</span></label><input id="costPrice" class="form-control" type="number" min="0" step="0.001"></div></div>
+          <button class="btn btn-primary w-100 mt-3" type="submit">Speichern</button>
+        </div></form>
+        <div id="costList" class="vstack gap-2"></div>
+      </section>
+
+      <section id="crewView" class="app-view d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Crew</h2><span class="badge text-bg-light" id="currentRole"></span></div>
+        <form id="inviteForm" class="card shadow-sm border-0 mb-3 d-none"><div class="card-body"><h3 class="h6">Crew einladen</h3><p class="small text-secondary">Die eingeladene Person meldet sich mit dieser E-Mail an und nimmt anschliessend die Einladung an.</p><div class="input-group"><input id="inviteEmail" class="form-control" type="email" required placeholder="crew@beispiel.ch"><button class="btn btn-primary" type="submit">Einladen</button></div></div></form>
+        <div id="crewList" class="vstack gap-2 mb-3"></div>
+        <div id="invitationList" class="vstack gap-2"></div>
+      </section>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

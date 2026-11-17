@@ -1,77 +1,84 @@
-# Bootslogbuch
+# Bootslogbuch Cloud
 
-`code.gs` und `Index.html` bilden die Google-Apps-Script-Web-App für das
-Bootslogbuch. Die Daten liegen in den Tabellenblättern `Logbuch` und `Kosten`
-des gebundenen Google Sheets. Das Kostenblatt wird beim ersten Aufruf automatisch
-erstellt.
+Dies ist der Branch `cloudflare-supabase` der neuen, mehrbenutzerfähigen
+Bootslogbuch-App. Die produktive Google-Apps-Script-Version bleibt unverändert
+auf dem Branch [`apps-script`](https://github.com/ScheubeK/Bootslogbuch/tree/apps-script).
 
-Das Tabellenblatt `Logbuch` verwendet zehn Spalten: `ID`, `Start`, `Ende`,
-`Motor Start`, `Motor Ende`, `Wein`, `Bemerkungen`, `Wetter`, `Temp` und
-`Wind`. Beim ersten Aufruf entfernt das Script bei älteren Ständen die drei
-Altspalten `Getankt`, `Liter` und `Preis/L` automatisch; vorhandene Daten in
-den nachfolgenden Spalten bleiben dabei erhalten.
+## Architektur
 
-## Kostenmodul
+- **Cloudflare Pages** liefert die statische Web-App aus `web/` aus.
+- **Cloudflare Pages Functions** stellt unter `/api/config` die öffentliche
+  Supabase-Browserkonfiguration bereit.
+- **Supabase Auth** meldet Personen per Magic Link an.
+- **Supabase PostgreSQL** speichert Boote, Crew, Ausflüge und Kosten.
+- **Supabase Row Level Security** erlaubt Zugriff ausschließlich auf die Boote,
+  deren Crew ein Benutzer angehört.
 
-Kosten werden unabhängig von Fahrten erfasst und sind nach Jahr filterbar. Die
-erlaubten Kategorien sind `Benzin`, `Versicherungen`, `Steuern`, `Bootsplatz`
-und `Unterhalt`. Es gibt bewusst keine Budget- oder Importfunktion; das Modul
-startet mit neuen Kostenposten. Die Benzin-Erfassung im Fahrtformular wird nicht
-mehr verwendet.
+Der Supabase-Anon-Key ist für Browser-Anwendungen vorgesehen; die Sicherheit
+der Daten kommt aus den Datenbankregeln. Der `service_role`-Key darf weder in
+Cloudflare Pages noch im Browser noch in Git gespeichert werden.
 
-Das Dashboard fasst das gewählte Jahr zusammen, inklusive Weinkonsum und
-Kosten-Total. Ausflüge haben einen eigenen, ebenfalls nach Jahr filterbaren Tab
-mit gut lesbaren Kommentar-Auszügen für die mobile Bedienung.
+## Datenbank einrichten
 
-Unter **Setup** löscht `Logbuch löschen` sämtliche Fahrten und Kosten. Der
-PDF-Bericht wird für ein ausgewähltes Jahr erzeugt und enthält die Fahrten sowie
-die Kosten dieses Jahres. Der CSV-Export lädt dagegen alle Jahre als getrennte
-CSV-Dateien für Logbuch und Kosten herunter.
+Die SQL-Dateien unter `supabase/migrations/` werden in dieser Reihenfolge im
+Supabase **SQL Editor** ausgeführt:
 
-## Lokale Kernlogik-Tests
+1. `202611170001_initial_schema.sql`
+2. `202611170002_protect_boat_owners.sql`
 
-Die Dashboard- und PDF-Berechnungen sind in `LogbookCore.html` von Browser- und
-Google-Apps-Script-Diensten getrennt. Dadurch lassen sie sich ohne Deployment
-lokal testen.
+Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
+Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
+Owner-Rolle versehentlich löscht.
 
-Voraussetzung ist Node.js 18 oder neuer. Es werden keine Paketabhängigkeiten
-installiert. Im Repository ausführen:
+## Magic Link konfigurieren
 
-```bash
-npm test
+In Supabase unter **Authentication → Providers → Email** muss E-Mail aktiviert
+sein. Für lokale Entwicklung wird als Site URL `http://localhost:5173` und als
+Redirect URL `http://localhost:5173/**` verwendet.
+
+Nach dem ersten Cloudflare-Deployment kommen zusätzlich diese Redirect URLs
+hinzu:
+
+```text
+https://DEIN-PROJEKT.pages.dev/**
+https://DEINE-EIGENE-DOMAIN/**
 ```
 
-Die Tests unter `test/` prüfen Logbuch- und Kostenkennzahlen, den lokalen
-Apps-Script-Adapter sowie die Dauerformatierung.
+Die Standard-E-Mailzustellung von Supabase reicht für erste Tests. Vor einem
+öffentlichen Start sollte ein eigener SMTP-Anbieter (zum Beispiel Resend) in
+Supabase hinterlegt werden, damit Login- und Einladungs-E-Mails zuverlässig
+zugestellt werden.
 
-## Lokale UI-Vorschau
+## Cloudflare Pages bereitstellen
 
-Die lokale Vorschau startet ohne Node.js und ohne Google-Deployment. Sie nutzt
-einen lokalen Ersatz für `google.script.run`; die Einträge werden ausschließlich
-im Browser-Speicher abgelegt.
+1. In Cloudflare **Workers & Pages → Create application → Pages → Connect to
+   Git** wählen.
+2. Das Repository `ScheubeK/Bootslogbuch` und den Branch
+   `cloudflare-supabase` auswählen.
+3. Framework: `None`; Build command: leer; Build output directory: `web`.
+4. Unter **Settings → Environment variables** für Preview und Production
+   setzen:
 
-```bash
-perl scripts/preview.pl
-```
+   | Variable | Wert |
+   | --- | --- |
+   | `SUPABASE_URL` | Project URL aus Supabase → Settings → API |
+   | `SUPABASE_ANON_KEY` | Anon / Publishable Key aus Supabase → Settings → API |
 
-Danach `http://127.0.0.1:4173` im Browser öffnen. Im lokalen Modus lassen sich
-Eingabe, Bearbeiten, Löschen, Dashboard, CSV- und PDF-Export testen. Das gelbe
-Banner kennzeichnet den Modus eindeutig. Für einen leeren Teststand kann über
-**Setup → Gesamtes Logbuch löschen** zurückgesetzt werden.
+5. Deploy auslösen und die neue `pages.dev`-URL in Supabase als Redirect URL
+   hinzufügen.
 
-Nicht simuliert werden die echte Google-Sheet-Anbindung, Apps-Script-
-Berechtigungen und der Open-Meteo-Abruf; statt Wetterdaten zeigt die Vorschau
-Testwerte an.
+Die Pages Function in `functions/api/config.js` liest diese Werte aus und
+liefert sie an die Browser-App aus. Es werden keine geheimen Admin-Schlüssel
+verwendet.
 
-## Manuelle Übernahme in Google Apps Script
+## Funktionsumfang der ersten Cloud-Version
 
-Für einen Test in Google Apps Script müssen diese drei Dateien als
-gleichnamige Dateien im Projekt liegen:
+- Magic-Link-Anmeldung und selbstständige Bootserstellung für Kapitäne
+- mehrere Boote pro Benutzer
+- Crew-Rollen `Owner` und `Crew`
+- Ausflüge und Kosten erfassen, bearbeiten und löschen
+- Jahresdashboard mit Kostenentwicklung
+- Crew-Einladungen als sicherer Link zum Kopieren und Versenden
 
-- `code.gs`
-- `Index.html`
-- `LogbookCore.html`
-
-`code.gs` bindet die Teil-Datei ein; `Index.html` verwendet ihre Funktionen.
-`LocalAppsScriptMock.js` und `scripts/preview.pl` werden nicht nach Google Apps
-Script übertragen; sie dienen ausschließlich der lokalen Vorschau.
+Der nächste Ausbau kann E-Mail-Versand für Crew-Einladungen, PDF-/CSV-Exporte,
+Wetterdaten und die Übernahme der bestehenden Apps-Script-Daten ergänzen.
