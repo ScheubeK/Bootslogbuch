@@ -87,9 +87,13 @@ async function sendMagicLink(event) {
   const button = event.currentTarget.querySelector('button');
   setBusy(button, true, 'Wird gesendet…');
   const email = element('loginEmail').value.trim().toLowerCase();
+  // Eine Crew-Einladung enthält ?invite=<token>. Der Parameter muss nach dem
+  // Magic-Link-Login noch vorhanden sein, damit sie automatisch angenommen wird.
+  const redirectUrl = new URL(window.location.href);
+  redirectUrl.hash = '';
   const { error } = await state.client.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` }
+    options: { emailRedirectTo: redirectUrl.toString() }
   });
   setBusy(button, false, 'Login-Link senden');
   if (error) return showNotice(error.message, 'danger');
