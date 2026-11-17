@@ -11,7 +11,7 @@ body { background: #f1f4f8; min-height: 100vh; }
 .app-nav .nav-link i { font-size: 1rem; }
 .app-nav .nav-link.active { color: #fff; background: #0d6efd; }
 .year-select { width: auto; }
-.metric-card { min-height: 108px; padding: 1rem; border-radius: 1rem; color: #fff; display: grid; gap: .25rem; box-shadow: 0 .3rem 1rem rgba(0,0,0,.1); }
+.metric-card { min-height: 108px; height: 100%; padding: 1rem; border-radius: 1rem; color: #fff; display: grid; gap: .25rem; box-shadow: 0 .3rem 1rem rgba(0,0,0,.1); }
 .metric-card i { opacity: .9; }
 .metric-card span { font-size: .78rem; }
 .metric-card strong { font-size: 1.25rem; }
