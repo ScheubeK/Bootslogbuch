@@ -121,3 +121,34 @@ verwendet.
 
 Der nächste Ausbau kann E-Mail-Versand für Crew-Einladungen, PDF-Exporte,
 Wetterdaten und die Übernahme der bestehenden Apps-Script-Daten ergänzen.
+
+## Testdaten und Testbenutzer bereinigen
+
+Nach der Testphase kann ein einzelnes Test-Boot vollständig entfernt werden,
+ohne andere Boote zu beeinflussen. Dabei werden **Datensätze** gelöscht, nicht
+die Tabellenstruktur.
+
+> Vorsicht: Dieser Vorgang ist nicht wiederherstellbar. Vorher bei Bedarf einen
+> CSV-Export aus der App erstellen.
+
+1. In Supabase **Table Editor → boats** öffnen und nach dem Namen des
+   Test-Boots filtern.
+2. Nur die betreffende Zeile des Test-Boots löschen. Nicht die Tabelle
+   `boats` selbst löschen.
+3. Durch die Datenbankbeziehungen werden automatisch auch Ausflüge, Kosten,
+   aktive Ausflüge, Einladungen und Crew-Zugehörigkeiten dieses Boots entfernt.
+4. Anschliessend unter **Authentication → Users** die reinen Testkonten
+   löschen. Dies entfernt auch deren Profile.
+
+Ein Testkonto darf nur gelöscht werden, wenn es nicht noch bei einem anderen
+Boot mitarbeitet. Andernfalls würde dieser Login dort ebenfalls verschwinden.
+Ein Benutzer, der das gelöschte Boot besass, lässt sich erst nach dem Löschen
+dieses Boots entfernen.
+
+Die App-Funktion **Settings → Alles löschen** entfernt lediglich Ausflüge und
+Kosten eines Boots. Das Boot und sein Besitzerkonto bleiben dabei bestehen.
+
+Für Google-Anmeldungen ist in der Google Cloud Console keine Bereinigung
+nötig: Es wird nur das Supabase-Konto entfernt, nie das Google-Konto der
+Person. Meldet sie sich später wieder an, entsteht ein neues Supabase-Konto
+(solange Registrierungen erlaubt sind).
