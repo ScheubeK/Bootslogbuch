@@ -8,6 +8,8 @@ const state = {
   role: null,
   trips: [],
   costs: [],
+  activeTrip: null,
+  finishingLiveTrip: false,
   selectedYear: String(new Date().getFullYear())
 };
 
@@ -63,7 +65,11 @@ function registerEvents() {
   element('cancelCostForm').addEventListener('click', () => resetCostForm(false));
   element('costForm').addEventListener('submit', saveCost);
   element('costCategory').addEventListener('change', updateFuelFields);
+  element('liveTripSwitch').addEventListener('change', toggleLiveTrip);
+  element('wineSwitch').addEventListener('change', event => setWineEnabled(event.target.checked));
+  document.querySelectorAll('[data-wine]').forEach(button => button.addEventListener('click', () => setWine(Number(button.dataset.wine))));
   element('inviteForm').addEventListener('submit', createInvitation);
+  element('exportCsvButton').addEventListener('click', exportCsv);
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
     syncYearSelectors();
@@ -173,13 +179,16 @@ async function createBoat(event) {
 }
 
 async function loadBoatData() {
-  const [{ data: trips, error: tripsError }, { data: costs, error: costsError }] = await Promise.all([
+  const [{ data: trips, error: tripsError }, { data: costs, error: costsError }, { data: activeTrip, error: activeTripError }] = await Promise.all([
     state.client.from('trips').select('*').eq('boat_id', state.boat.id).order('start_at', { ascending: false }),
-    state.client.from('costs').select('*').eq('boat_id', state.boat.id).order('cost_date', { ascending: false })
+    state.client.from('costs').select('*').eq('boat_id', state.boat.id).order('cost_date', { ascending: false }),
+    state.client.from('active_trips').select('*').eq('boat_id', state.boat.id).maybeSingle()
   ]);
   if (tripsError || costsError) return showNotice((tripsError || costsError).message, 'danger');
   state.trips = trips || [];
   state.costs = costs || [];
+  // Until migration 003 is installed, all existing functions remain usable.
+  state.activeTrip = activeTripError ? null : activeTrip;
   populateYears();
   renderAll();
 }
@@ -207,6 +216,7 @@ function renderAll() {
   renderDashboard();
   renderTrips();
   renderCosts();
+  renderLiveTrip();
   renderCrew();
 }
 
@@ -272,17 +282,82 @@ function renderTrips() {
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
 }
 
+function localDateTime(value) {
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function renderLiveTrip() {
+  const isActive = Boolean(state.activeTrip);
+  element('liveTripCard').classList.toggle('is-active', isActive);
+  element('liveTripSwitch').checked = isActive;
+  element('liveTripStatus').textContent = isActive ? 'Ausflug läuft… ⛵' : 'Bereit zum Ablegen…';
+  element('liveTripHint').textContent = isActive
+    ? `Gestartet am ${new Date(state.activeTrip.started_at).toLocaleString('de-CH')}. Zum Beenden den Schalter ausschalten.`
+    : 'Startzeit wird sicher gespeichert.';
+}
+
+async function toggleLiveTrip(event) {
+  if (event.target.checked) {
+    const startedAt = new Date().toISOString();
+    const { data, error } = await state.client.from('active_trips')
+      .insert({ boat_id: state.boat.id, started_by: state.user.id, started_at: startedAt })
+      .select().single();
+    if (error) {
+      event.target.checked = false;
+      if (error.code === '42P01') return showNotice('Live-Tracking ist noch nicht eingerichtet. Bitte zuerst Migration 003 ausführen.', 'danger');
+      return showNotice(error.message, 'danger');
+    }
+    state.activeTrip = data;
+    state.finishingLiveTrip = false;
+    renderLiveTrip();
+    showNotice('Ausflug gestartet. Die Startzeit bleibt auch nach Sleep oder Neustart erhalten.');
+    return;
+  }
+
+  if (!state.activeTrip) return;
+  state.finishingLiveTrip = true;
+  resetTripForm(true);
+  element('tripStart').value = localDateTime(state.activeTrip.started_at);
+  element('tripEnd').value = localDateTime(new Date());
+  element('liveTripStatus').textContent = 'Ausflug beenden und speichern…';
+  element('liveTripHint').textContent = 'Bitte Motorstunden und weitere Angaben ergänzen, dann speichern.';
+  element('liveTripSwitch').checked = false;
+}
+
+function setWineEnabled(enabled) {
+  element('winePicker').classList.toggle('d-none', !enabled);
+  if (enabled && !Number(element('tripWine').value)) setWine(1);
+  if (!enabled) setWine(0);
+}
+
+function setWine(value) {
+  const wine = Math.max(0, Math.min(6, Number(value) || 0));
+  element('tripWine').value = wine;
+  element('wineSwitch').checked = wine > 0;
+  element('winePicker').classList.toggle('d-none', wine === 0);
+  document.querySelectorAll('[data-wine]').forEach(button => button.classList.toggle('is-selected', Number(button.dataset.wine) <= wine));
+  element('wineLabel').textContent = wine ? `${wine} ${wine === 1 ? 'Flasche' : 'Flaschen'}` : '';
+}
+
 function resetTripForm(show) {
   element('tripForm').classList.toggle('d-none', !show);
-  if (!show) { element('tripForm').reset(); element('tripId').value = ''; return; }
+  if (!show) {
+    element('tripForm').reset();
+    element('tripId').value = '';
+    state.finishingLiveTrip = false;
+    setWine(0);
+    renderLiveTrip();
+    return;
+  }
   element('tripForm').reset();
   element('tripId').value = '';
   const now = new Date();
-  const local = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  element('tripStart').value = local(now);
-  element('tripEnd').value = local(new Date(now.getTime() + 2 * 60 * 60 * 1000));
+  element('tripStart').value = localDateTime(now);
+  element('tripEnd').value = localDateTime(new Date(now.getTime() + 2 * 60 * 60 * 1000));
   element('tripEngineStart').value = state.trips[0]?.engine_end ?? 0;
   element('tripEngineEnd').value = state.trips[0]?.engine_end ?? 0;
+  setWine(0);
   element('tripForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -299,14 +374,19 @@ async function saveTrip(event) {
   const request = id ? state.client.from('trips').update(values).eq('id', id) : state.client.from('trips').insert(values);
   const { error } = await request;
   if (error) return showNotice(error.message, 'danger');
+  if (!id && state.finishingLiveTrip && state.activeTrip) {
+    const { error: activeTripError } = await state.client.from('active_trips').delete().eq('boat_id', state.boat.id);
+    if (activeTripError) return showNotice(`Ausflug gespeichert, Live-Status konnte aber nicht gelöscht werden: ${activeTripError.message}`, 'danger');
+    state.activeTrip = null;
+  }
+  state.finishingLiveTrip = false;
   resetTripForm(false); await loadBoatData(); showNotice(id ? 'Ausflug aktualisiert.' : 'Ausflug gespeichert.');
 }
 
 window.editTrip = id => {
   const trip = state.trips.find(item => item.id === id); if (!trip) return;
   resetTripForm(true); element('tripId').value = trip.id;
-  const local = value => new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  element('tripStart').value = local(trip.start_at); element('tripEnd').value = local(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; element('tripWine').value = trip.wine_bottles; element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
+  element('tripStart').value = localDateTime(trip.start_at); element('tripEnd').value = localDateTime(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; setWine(trip.wine_bottles); element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
 };
 window.deleteTrip = async id => { if (!confirm('Diesen Ausflug wirklich löschen?')) return; const { error } = await state.client.from('trips').delete().eq('id', id); if (error) return showNotice(error.message, 'danger'); await loadBoatData(); showNotice('Ausflug gelöscht.'); };
 
@@ -364,7 +444,25 @@ window.removeCrewMember = async userId => {
   showNotice('Crewmitglied entfernt.');
 };
 
-function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'crew') renderCrew(); }
+function csvCell(value) { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
+function downloadCsv(filename, headers, rows) {
+  const content = `\uFEFF${[headers, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`;
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+function exportCsv() {
+  downloadCsv('Bootslogbuch_Ausfluege_alle_Jahre.csv', ['ID', 'Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wind'], state.trips.map(trip => [trip.id, trip.start_at, trip.end_at, trip.engine_start, trip.engine_end, trip.wine_bottles, trip.remarks, trip.weather, trip.temperature_c, trip.wind_kmh]));
+  downloadCsv('Bootslogbuch_Kosten_alle_Jahre.csv', ['ID', 'Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'], state.costs.map(cost => [cost.id, cost.cost_date, cost.category, cost.description, cost.amount_chf, cost.litres, cost.price_per_litre]));
+  showNotice('CSV-Export gestartet.');
+}
+
+function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') renderCrew(); }
 async function switchBoat() { if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.'); const choices = state.boats.map((boat, index) => `${index + 1}: ${boat.name}`).join('\n'); const selected = Number(window.prompt(`Boot auswählen:\n${choices}`)); if (!selected || !state.boats[selected - 1]) return; state.boat = state.boats[selected - 1]; state.role = state.boat.role; localStorage.setItem(`bootslogbuch.boat.${state.user.id}`, state.boat.id); await loadBoatData(); showView('dashboard'); }
 async function signOut() { await state.client.auth.signOut(); showNotice('Abgemeldet.'); }
 function showScreen(id) { ['loadingScreen', 'loginScreen', 'setupScreen', 'appScreen'].forEach(screenId => element(screenId).classList.toggle('d-none', screenId !== id)); }

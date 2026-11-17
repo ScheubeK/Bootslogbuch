@@ -26,10 +26,13 @@ Supabase **SQL Editor** ausgeführt:
 
 1. `202611170001_initial_schema.sql`
 2. `202611170002_protect_boat_owners.sql`
+3. `202611170003_active_trips.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
-Owner-Rolle versehentlich löscht.
+Owner-Rolle versehentlich löscht. Die dritte speichert den Startzeitpunkt eines
+laufenden Ausflugs separat, damit er nach iPhone-Sleep oder einem Neustart der
+App erhalten bleibt.
 
 ## Anmeldung konfigurieren
 
@@ -104,7 +107,9 @@ verwendet.
 - Crew-Rollen `Owner` und `Crew`
 - Ausflüge und Kosten erfassen, bearbeiten und löschen
 - Jahresdashboard mit Kostenentwicklung
+- fortsetzbarer Live-Ausflug mit serverseitig gespeichertem Startzeitpunkt
 - Crew-Einladungen als sicherer Link zum Kopieren und Versenden
+- CSV-Export aller Ausflüge und Kosten eines Boots
 
-Der nächste Ausbau kann E-Mail-Versand für Crew-Einladungen, PDF-/CSV-Exporte,
+Der nächste Ausbau kann E-Mail-Versand für Crew-Einladungen, PDF-Exporte,
 Wetterdaten und die Übernahme der bestehenden Apps-Script-Daten ergänzen.
