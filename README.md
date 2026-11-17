@@ -29,6 +29,7 @@ Supabase **SQL Editor** ausgeführt:
 3. `202611170003_active_trips.sql`
 4. `202611170004_boat_weather_location.sql`
 5. `202611170005_reset_boat_data.sql`
+6. `202611170006_import_boat_backup.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
@@ -117,7 +118,8 @@ verwendet.
 - fortsetzbarer Live-Ausflug mit serverseitig gespeichertem Startzeitpunkt
 - frei wählbarer Wetterort und automatische Wetterdaten bei neuen Ausflügen
 - Crew-Einladungen als sicherer Link zum Kopieren und Versenden
-- CSV-Export aller Ausflüge und Kosten eines Boots
+- Excel-Sicherung aller Ausflüge und Kosten in einer Datei mit zwei Tabs
+- geschützter Excel-Import für den Kapitän
 
 Der nächste Ausbau kann E-Mail-Versand für Crew-Einladungen, PDF-Exporte,
 Wetterdaten und die Übernahme der bestehenden Apps-Script-Daten ergänzen.

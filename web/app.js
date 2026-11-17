@@ -80,9 +80,12 @@ function registerEvents() {
   element('liveTripSwitch').addEventListener('change', toggleLiveTrip);
   element('wineSwitch').addEventListener('change', event => setWineEnabled(event.target.checked));
   document.querySelectorAll('[data-wine]').forEach(button => button.addEventListener('click', () => setWine(Number(button.dataset.wine))));
+  ['tripStart', 'tripEngineStart', 'tripEngineEnd'].forEach(id => element(id).addEventListener('input', updateEngineHint));
+  element('tripDetailEditButton').addEventListener('click', editTripFromDetail);
   element('inviteForm').addEventListener('submit', createInvitation);
   element('weatherSettingsForm').addEventListener('submit', saveWeatherLocation);
-  element('exportCsvButton').addEventListener('click', exportCsv);
+  element('exportExcelButton').addEventListener('click', exportExcel);
+  element('importExcelInput').addEventListener('change', importExcel);
   element('resetDataButton').addEventListener('click', resetBoatData);
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
@@ -255,11 +258,24 @@ function renderDashboard() {
   const totals = Object.fromEntries(categories.map(category => [category, 0]));
   costs.forEach(cost => { if (totals[cost.category] !== undefined) totals[cost.category] += numberOrZero(cost.amount_chf); });
   const totalCosts = Object.values(totals).reduce((sum, total) => sum + total, 0);
+  const fuelCosts = costs.filter(cost => cost.category === 'Benzin');
+  const fuelLitres = fuelCosts.reduce((sum, cost) => sum + numberOrZero(cost.litres), 0);
+  const fuelTotal = fuelCosts.reduce((sum, cost) => sum + numberOrZero(cost.amount_chf), 0);
+  const previousYear = String(Number(state.selectedYear) - 1);
+  const previousCosts = state.costs.filter(cost => dateYear(cost.cost_date) === previousYear).reduce((sum, cost) => sum + numberOrZero(cost.amount_chf), 0);
   element('metricTrips').textContent = trips.length;
   element('metricEngine').textContent = engineHours.toFixed(1).replace('.', ',');
   element('metricSeaTime').textContent = `${seaTime.toFixed(1).replace('.', ',')} h`;
   element('metricWine').textContent = `${wine} Fl.`;
   element('metricCost').textContent = formatCurrency(totalCosts);
+  element('metricCostPerEngine').textContent = engineHours > 0 ? `${formatCurrency(totalCosts / engineHours)}/h` : '–';
+  element('metricFuel').textContent = fuelLitres > 0 ? `${fuelLitres.toFixed(1).replace('.', ',')} L · ${formatCurrency(fuelTotal / fuelLitres)}/L` : '0 L';
+  if (!previousCosts) element('metricCostComparison').textContent = 'Keine Kosten im Vorjahr';
+  else {
+    const difference = totalCosts - previousCosts;
+    const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
+    element('metricCostComparison').textContent = `Zum Vorjahr: ${sign}${formatCurrency(Math.abs(difference))} (${difference / previousCosts * 100 >= 0 ? '+' : '−'}${Math.abs(difference / previousCosts * 100).toFixed(0)} %)`;
+  }
   element('costBreakdown').innerHTML = categories.map(category => `<div class="col-6"><div class="small text-secondary">${category}</div><strong>${formatCurrency(totals[category])}</strong></div>`).join('');
   renderTrend();
 }
@@ -306,13 +322,47 @@ function renderTrips() {
       trip.weather ? `<span><i class="bi bi-cloud-sun me-1"></i>${escapeHtml(trip.weather)}</span>` : '',
       trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `<span><i class="bi bi-wind me-1"></i>${trip.wind_kmh} km/h</span>` : ''
     ].filter(Boolean).join('');
-    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
+    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="showTripDetails('${trip.id}')" aria-label="Details"><i class="bi bi-chevron-right"></i></button><button class="btn btn-link btn-sm p-0 ms-2" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
 }
 
 function localDateTime(value) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function previousTripForEngineReading(startValue, excludedId = '') {
+  const startAt = new Date(startValue).getTime();
+  if (!Number.isFinite(startAt)) return null;
+  return state.trips
+    .filter(trip => trip.id !== excludedId && new Date(trip.start_at).getTime() < startAt)
+    .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))[0] || null;
+}
+
+function updateEngineHint() {
+  const hint = element('tripEngineHint');
+  const engineStartInput = element('tripEngineStart');
+  const engineEndInput = element('tripEngineEnd');
+  const engineStart = numberOrZero(engineStartInput.value);
+  const engineEnd = numberOrZero(engineEndInput.value);
+  const previousTrip = previousTripForEngineReading(element('tripStart').value, element('tripId').value);
+  const previousEnd = previousTrip ? numberOrZero(previousTrip.engine_end) : null;
+  const messages = [];
+
+  engineEndInput.setCustomValidity('');
+  hint.className = 'small text-secondary';
+  if (previousEnd !== null) messages.push(`Letzter Endstand: ${previousEnd.toFixed(1).replace('.', ',')} h.`);
+  if (engineEndInput.value !== '' && engineEnd < engineStart) {
+    engineEndInput.setCustomValidity('Der Motor-Endstand darf nicht kleiner als der Startstand sein.');
+    hint.className = 'small text-danger';
+    messages.push('Der Endstand liegt unter dem Startstand.');
+  } else if (previousEnd !== null && engineStartInput.value !== '' && engineStart < previousEnd) {
+    hint.className = 'small text-warning';
+    messages.push('Prüfen: Der Startstand liegt unter dem letzten Endstand.');
+  } else if (previousEnd !== null && engineStartInput.value !== '' && engineStart === previousEnd) {
+    messages.push('Motorstunden automatisch vom letzten Ausflug übernommen.');
+  }
+  hint.textContent = messages.join(' ');
 }
 
 function renderLiveTrip() {
@@ -371,6 +421,7 @@ function renderWeatherSettings() {
   if (!state.boat) return;
   const isOwner = state.role === 'owner';
   element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
+  element('backupDataCard').classList.toggle('d-none', !isOwner);
   element('resetDataCard').classList.toggle('d-none', !isOwner);
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
@@ -449,6 +500,7 @@ function resetTripForm(show, withWeather = true) {
     state.weatherRequestId += 1;
     element('tripForm').reset();
     element('tripId').value = '';
+    element('tripEngineHint').textContent = '';
     state.finishingLiveTrip = false;
     setWine(0);
     renderLiveTrip();
@@ -461,6 +513,7 @@ function resetTripForm(show, withWeather = true) {
   element('tripEnd').value = localDateTime(new Date(now.getTime() + 2 * 60 * 60 * 1000));
   element('tripEngineStart').value = state.trips[0]?.engine_end ?? 0;
   element('tripEngineEnd').value = state.trips[0]?.engine_end ?? 0;
+  updateEngineHint();
   setWine(0);
   element('weatherAutoStatus').textContent = '';
   if (withWeather) loadCurrentWeather();
@@ -470,9 +523,12 @@ function resetTripForm(show, withWeather = true) {
 async function saveTrip(event) {
   event.preventDefault();
   const id = element('tripId').value;
+  const engineStart = numberOrZero(element('tripEngineStart').value);
+  const engineEnd = numberOrZero(element('tripEngineEnd').value);
+  if (engineEnd < engineStart) return showNotice('Der Motor-Endstand darf nicht kleiner als der Startstand sein.', 'danger');
   const values = {
     boat_id: state.boat.id, start_at: new Date(element('tripStart').value).toISOString(), end_at: new Date(element('tripEnd').value).toISOString(),
-    engine_start: numberOrZero(element('tripEngineStart').value), engine_end: numberOrZero(element('tripEngineEnd').value),
+    engine_start: engineStart, engine_end: engineEnd,
     wine_bottles: Number(element('tripWine').value) || 0, remarks: element('tripRemarks').value.trim(), weather: element('tripWeather').value.trim() || null,
     temperature_c: element('tripTemperature').value === '' ? null : numberOrZero(element('tripTemperature').value), wind_kmh: element('tripWind').value === '' ? null : numberOrZero(element('tripWind').value)
   };
@@ -493,7 +549,43 @@ window.editTrip = id => {
   const trip = state.trips.find(item => item.id === id); if (!trip) return;
   resetTripForm(true, false); element('tripId').value = trip.id;
   element('tripStart').value = localDateTime(trip.start_at); element('tripEnd').value = localDateTime(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; setWine(trip.wine_bottles); element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
+  updateEngineHint();
 };
+
+function formatTripDateTime(value) {
+  return new Date(value).toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+window.showTripDetails = id => {
+  const trip = state.trips.find(item => item.id === id);
+  if (!trip) return;
+  const durationHours = Math.max(0, new Date(trip.end_at) - new Date(trip.start_at)) / 3600000;
+  const engineHours = numberOrZero(trip.engine_end) - numberOrZero(trip.engine_start);
+  const weather = [
+    trip.weather,
+    trip.temperature_c !== null && trip.temperature_c !== undefined ? `${trip.temperature_c} °C` : '',
+    trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `${trip.wind_kmh} km/h Wind` : ''
+  ].filter(Boolean).map(escapeHtml).join(' · ') || '–';
+  element('tripDetailTitle').textContent = `Ausflug vom ${new Date(trip.start_at).toLocaleDateString('de-CH')}`;
+  element('tripDetailContent').innerHTML = `<dl class="row mb-0 trip-detail-list">
+    <dt class="col-5">Start</dt><dd class="col-7">${formatTripDateTime(trip.start_at)}</dd>
+    <dt class="col-5">Ende</dt><dd class="col-7">${formatTripDateTime(trip.end_at)}</dd>
+    <dt class="col-5">Zeit auf See</dt><dd class="col-7">${durationHours.toFixed(1).replace('.', ',')} h</dd>
+    <dt class="col-5">Motor</dt><dd class="col-7">${numberOrZero(trip.engine_start).toFixed(1).replace('.', ',')} → ${numberOrZero(trip.engine_end).toFixed(1).replace('.', ',')} h <span class="text-secondary">(+${engineHours.toFixed(1).replace('.', ',')} h)</span></dd>
+    <dt class="col-5">Wein</dt><dd class="col-7">${trip.wine_bottles ? `${trip.wine_bottles} ${trip.wine_bottles === 1 ? 'Flasche' : 'Flaschen'}` : '–'}</dd>
+    <dt class="col-5">Wetter</dt><dd class="col-7">${weather}</dd>
+    <dt class="col-12 mt-2">Bemerkungen</dt><dd class="col-12 mb-0">${trip.remarks ? escapeHtml(trip.remarks).replace(/\n/g, '<br>') : '<span class="text-secondary">Keine Bemerkungen</span>'}</dd>
+  </dl>`;
+  element('tripDetailEditButton').dataset.tripId = id;
+  bootstrap.Modal.getOrCreateInstance(element('tripDetailModal')).show();
+};
+
+function editTripFromDetail(event) {
+  const id = event.currentTarget.dataset.tripId;
+  if (!id) return;
+  bootstrap.Modal.getOrCreateInstance(element('tripDetailModal')).hide();
+  window.setTimeout(() => window.editTrip(id), 150);
+}
 window.deleteTrip = async id => { if (!confirm('Diesen Ausflug wirklich löschen?')) return; const { error } = await state.client.from('trips').delete().eq('id', id); if (error) return showNotice(error.message, 'danger'); await loadBoatData(); showNotice('Ausflug gelöscht.'); };
 
 function renderCosts() {
@@ -550,22 +642,145 @@ window.removeCrewMember = async userId => {
   showNotice('Crewmitglied entfernt.');
 };
 
-function csvCell(value) { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
-function downloadCsv(filename, headers, rows) {
-  const content = `\uFEFF${[headers, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`;
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+function requireOwnerForBackup() {
+  if (state.role === 'owner') return true;
+  showNotice('Nur der Kapitän kann Sicherungen exportieren oder importieren.', 'danger');
+  return false;
 }
-function exportCsv() {
-  downloadCsv('Bootslogbuch_Ausfluege_alle_Jahre.csv', ['ID', 'Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wind'], state.trips.map(trip => [trip.id, trip.start_at, trip.end_at, trip.engine_start, trip.engine_end, trip.wine_bottles, trip.remarks, trip.weather, trip.temperature_c, trip.wind_kmh]));
-  downloadCsv('Bootslogbuch_Kosten_alle_Jahre.csv', ['ID', 'Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'], state.costs.map(cost => [cost.id, cost.cost_date, cost.category, cost.description, cost.amount_chf, cost.litres, cost.price_per_litre]));
-  showNotice('CSV-Export gestartet.');
+
+function safeFilename(value) { return String(value || 'Boot').trim().replace(/[^a-z0-9äöüß_-]+/gi, '_'); }
+function excelDateTime(value) { return localDateTime(value).replace('T', ' '); }
+function addExcelSheet(workbook, name, headers, rows, widths) {
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  worksheet['!cols'] = widths.map(width => ({ wch: width }));
+  XLSX.utils.book_append_sheet(workbook, worksheet, name);
+}
+
+function exportExcel() {
+  if (!requireOwnerForBackup()) return;
+  if (!window.XLSX) return showNotice('Die Excel-Bibliothek konnte nicht geladen werden. Bitte versuche es erneut.', 'danger');
+  const workbook = XLSX.utils.book_new();
+  addExcelSheet(workbook, 'Ausflüge', ['Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wind'], state.trips.map(trip => [
+    excelDateTime(trip.start_at), excelDateTime(trip.end_at), Number(trip.engine_start), Number(trip.engine_end), Number(trip.wine_bottles), trip.remarks || '', trip.weather || '', trip.temperature_c ?? '', trip.wind_kmh ?? ''
+  ]), [19, 19, 13, 13, 8, 45, 24, 13, 12]);
+  addExcelSheet(workbook, 'Kosten', ['Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'], state.costs.map(cost => [
+    cost.cost_date, cost.category, cost.description || '', Number(cost.amount_chf), cost.litres ?? '', cost.price_per_litre ?? ''
+  ]), [14, 18, 42, 16, 12, 14]);
+  XLSX.writeFile(workbook, `Bootslogbuch_${safeFilename(state.boat.name)}_Sicherung.xlsx`, { compression: true });
+  showNotice('Excel-Sicherung heruntergeladen.');
+}
+
+function normaliseImportHeader(value) {
+  return String(value ?? '').trim().toLocaleLowerCase('de-CH').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+}
+function importValue(row, aliases) {
+  const normalized = Object.entries(row).find(([key]) => aliases.includes(normaliseImportHeader(key)));
+  return normalized ? normalized[1] : null;
+}
+function hasImportValue(value) { return value !== null && value !== undefined && String(value).trim() !== ''; }
+function importNumber(value, label, required = false) {
+  if (!hasImportValue(value)) {
+    if (required) throw new Error(`${label} fehlt.`);
+    return null;
+  }
+  const compact = String(value).replace(/[’'\s]/g, '');
+  const normalized = compact.includes(',') ? compact.replace(/\./g, '').replace(',', '.') : compact;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) throw new Error(`${label} ist ungültig.`);
+  return parsed;
+}
+function importDateTime(value, label) {
+  let date;
+  if (value instanceof Date) date = value;
+  else if (typeof value === 'number' && window.XLSX?.SSF) {
+    const parts = XLSX.SSF.parse_date_code(value);
+    if (parts) date = new Date(parts.y, parts.m - 1, parts.d, parts.H || 0, parts.M || 0, Math.floor(parts.S || 0));
+  }
+  else {
+    const raw = String(value ?? '').trim();
+    const swiss = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?$/);
+    if (swiss) date = new Date(Number(swiss[3]), Number(swiss[2]) - 1, Number(swiss[1]), Number(swiss[4] || 0), Number(swiss[5] || 0));
+    else date = new Date(raw.replace(' ', 'T'));
+  }
+  if (Number.isNaN(date?.getTime())) throw new Error(`${label} ist kein gültiges Datum.`);
+  return date.toISOString();
+}
+function importCostDate(value, label) {
+  if (value instanceof Date) return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  if (typeof value === 'number' && window.XLSX?.SSF) {
+    const parts = XLSX.SSF.parse_date_code(value);
+    if (parts) return `${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`;
+  }
+  const raw = String(value ?? '').trim();
+  const swiss = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (swiss) return `${swiss[3]}-${String(swiss[2]).padStart(2, '0')}-${String(swiss[1]).padStart(2, '0')}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  throw new Error(`${label} ist kein gültiges Datum.`);
+}
+function parseImportedTrips(rows) {
+  return rows.map((row, index) => {
+    const prefix = `Ausflüge, Zeile ${index + 2}`;
+    const startAt = importDateTime(importValue(row, ['start', 'startdatumzeit']), `${prefix}: Start`);
+    const endAt = importDateTime(importValue(row, ['ende', 'endedatumzeit']), `${prefix}: Ende`);
+    const engineStart = importNumber(importValue(row, ['motorstart']), `${prefix}: Motor Start`, true);
+    const engineEnd = importNumber(importValue(row, ['motorende']), `${prefix}: Motor Ende`, true);
+    const wine = importNumber(importValue(row, ['wein']), `${prefix}: Wein`) ?? 0;
+    if (new Date(endAt) < new Date(startAt)) throw new Error(`${prefix}: Ende liegt vor dem Start.`);
+    if (engineEnd < engineStart) throw new Error(`${prefix}: Motor Ende liegt unter Motor Start.`);
+    if (wine < 0 || wine > 99) throw new Error(`${prefix}: Wein muss zwischen 0 und 99 liegen.`);
+    return {
+      start_at: startAt, end_at: endAt, engine_start: engineStart, engine_end: engineEnd, wine_bottles: wine,
+      remarks: String(importValue(row, ['bemerkungen', 'bemerkung']) ?? '').trim(),
+      weather: String(importValue(row, ['wetter']) ?? '').trim() || null,
+      temperature_c: importNumber(importValue(row, ['temperatur', 'temp']), `${prefix}: Temperatur`),
+      wind_kmh: importNumber(importValue(row, ['wind', 'windkmh']), `${prefix}: Wind`)
+    };
+  });
+}
+function parseImportedCosts(rows) {
+  return rows.map((row, index) => {
+    const prefix = `Kosten, Zeile ${index + 2}`;
+    const categoryValue = String(importValue(row, ['kategorie']) ?? '').trim();
+    const category = categories.find(item => normaliseImportHeader(item) === normaliseImportHeader(categoryValue));
+    if (!category) throw new Error(`${prefix}: Kategorie ist ungültig.`);
+    const amount = importNumber(importValue(row, ['betragchf', 'betrag']), `${prefix}: Betrag`, true);
+    const litres = importNumber(importValue(row, ['liter', 'litres']), `${prefix}: Liter`);
+    const price = importNumber(importValue(row, ['preisliter']), `${prefix}: Preis/Liter`);
+    if (amount < 0 || litres !== null && litres < 0 || price !== null && price < 0) throw new Error(`${prefix}: Zahlen dürfen nicht negativ sein.`);
+    return {
+      cost_date: importCostDate(importValue(row, ['datum']), `${prefix}: Datum`), category,
+      description: String(importValue(row, ['beschreibung']) ?? '').trim(), amount_chf: amount,
+      litres: category === 'Benzin' ? litres : null, price_per_litre: category === 'Benzin' ? price : null
+    };
+  });
+}
+
+async function importExcel(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !requireOwnerForBackup()) return;
+  if (!window.XLSX) return showNotice('Die Excel-Bibliothek konnte nicht geladen werden. Bitte versuche es erneut.', 'danger');
+  try {
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const sheetByName = aliases => workbook.SheetNames.find(name => aliases.includes(normaliseImportHeader(name)));
+    const tripsSheet = sheetByName(['ausfluege', 'logbuch']);
+    const costsSheet = sheetByName(['kosten']);
+    if (!tripsSheet && !costsSheet) throw new Error('Die Excel-Datei benötigt mindestens den Tab „Ausflüge“ oder „Kosten“.');
+    const trips = tripsSheet ? parseImportedTrips(XLSX.utils.sheet_to_json(workbook.Sheets[tripsSheet], { defval: null, raw: true })) : [];
+    const costs = costsSheet ? parseImportedCosts(XLSX.utils.sheet_to_json(workbook.Sheets[costsSheet], { defval: null, raw: true })) : [];
+    if (!trips.length && !costs.length) throw new Error('Die Excel-Datei enthält keine importierbaren Zeilen.');
+    if (!confirm(`${trips.length} Ausflüge und ${costs.length} Kosten werden zu „${state.boat.name}“ hinzugefügt. Bestehende Daten bleiben erhalten. Fortfahren?`)) return;
+    const { error } = await state.client.rpc('import_boat_backup', { target_boat_id: state.boat.id, trip_rows: trips, cost_rows: costs });
+    if (error) {
+      if (error.code === 'PGRST202') throw new Error('Der Datenimport ist noch nicht eingerichtet. Bitte zuerst Migration 006 im Supabase SQL Editor ausführen.');
+      throw error;
+    }
+    await loadBoatData();
+    showNotice(`${trips.length} Ausflüge und ${costs.length} Kosten importiert.`);
+  } catch (error) {
+    showNotice(error.message || 'Die Excel-Datei konnte nicht importiert werden.', 'danger');
+  }
 }
 
 function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') renderCrew(); }
