@@ -318,7 +318,10 @@ async function renderCrew() {
     state.client.from('boat_invitations').select('id, email, token, expires_at').eq('boat_id', state.boat.id).is('accepted_at', null).order('created_at', { ascending: false })
   ]);
   if (membersError || invitationsError) return showNotice((membersError || invitationsError).message, 'danger');
-  element('crewList').innerHTML = (members || []).map(member => `<article class="card entry-card"><div class="card-body py-3 d-flex justify-content-between"><div><strong>${escapeHtml(member.profiles?.display_name || member.profiles?.email || 'Crewmitglied')}</strong><div class="small text-secondary">${escapeHtml(member.profiles?.email || '')}</div></div><span class="badge ${member.role === 'owner' ? 'text-bg-primary' : 'text-bg-light'} align-self-center">${member.role === 'owner' ? 'Kapitän' : 'Crew'}</span></div></article>`).join('') || '<div class="empty-state">Noch keine Crewmitglieder.</div>';
+  element('crewList').innerHTML = (members || []).map(member => {
+    const canRemove = isOwner && member.role === 'crew';
+    return `<article class="card entry-card"><div class="card-body py-3 d-flex justify-content-between gap-3"><div><strong>${escapeHtml(member.profiles?.display_name || member.profiles?.email || 'Crewmitglied')}</strong><div class="small text-secondary">${escapeHtml(member.profiles?.email || '')}</div></div><div class="d-flex flex-column align-items-end gap-2"><span class="badge ${member.role === 'owner' ? 'text-bg-primary' : 'text-bg-light'}">${member.role === 'owner' ? 'Kapitän' : 'Crew'}</span>${canRemove ? `<button class="btn btn-outline-danger btn-sm" onclick="removeCrewMember('${member.user_id}')"><i class="bi bi-person-dash me-1"></i>Entfernen</button>` : ''}</div></div></article>`;
+  }).join('') || '<div class="empty-state">Noch keine Crewmitglieder.</div>';
   element('invitationList').innerHTML = isOwner && invitations?.length ? `<div class="small text-secondary mt-2">Offene Einladungen</div>${invitations.map(invitation => `<article class="card entry-card"><div class="card-body py-3"><strong>${escapeHtml(invitation.email)}</strong><div class="small text-secondary mt-1">Gültig bis ${new Date(invitation.expires_at).toLocaleDateString('de-CH')}</div><button class="btn btn-outline-primary btn-sm mt-2" onclick="copyInvitation('${invitation.token}')"><i class="bi bi-link-45deg me-1"></i>Einladungslink kopieren</button></div></article>`).join('')}` : '';
 }
 
@@ -330,6 +333,17 @@ async function createInvitation(event) {
   element('inviteEmail').value = ''; await renderCrew(); showNotice('Einladung erstellt. Kopiere nun den Einladungslink.');
 }
 window.copyInvitation = async token => { const link = `${window.location.origin}${window.location.pathname}?invite=${token}`; try { await navigator.clipboard.writeText(link); showNotice('Einladungslink kopiert.'); } catch (_) { window.prompt('Einladungslink kopieren:', link); } };
+window.removeCrewMember = async userId => {
+  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann Crewmitglieder entfernen.', 'danger');
+  const member = await state.client.from('boat_memberships').select('profiles(email, display_name)').eq('boat_id', state.boat.id).eq('user_id', userId).eq('role', 'crew').maybeSingle();
+  if (member.error) return showNotice(member.error.message, 'danger');
+  const name = member.data?.profiles?.display_name || member.data?.profiles?.email || 'dieses Crewmitglied';
+  if (!confirm(`${name} wirklich vom Boot entfernen?`)) return;
+  const { error } = await state.client.from('boat_memberships').delete().eq('boat_id', state.boat.id).eq('user_id', userId).eq('role', 'crew');
+  if (error) return showNotice(error.message, 'danger');
+  await renderCrew();
+  showNotice('Crewmitglied entfernt.');
+};
 
 function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'crew') renderCrew(); }
 async function switchBoat() { if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.'); const choices = state.boats.map((boat, index) => `${index + 1}: ${boat.name}`).join('\n'); const selected = Number(window.prompt(`Boot auswählen:\n${choices}`)); if (!selected || !state.boats[selected - 1]) return; state.boat = state.boats[selected - 1]; state.role = state.boat.role; localStorage.setItem(`bootslogbuch.boat.${state.user.id}`, state.boat.id); await loadBoatData(); showView('dashboard'); }
