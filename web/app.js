@@ -300,7 +300,12 @@ function renderTrips() {
   element('tripList').innerHTML = trips.length ? trips.map(trip => {
     const hours = numberOrZero(trip.engine_end) - numberOrZero(trip.engine_start);
     const date = new Date(trip.start_at).toLocaleDateString('de-CH');
-    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${trip.weather ? `<div class="small text-secondary mt-2">${escapeHtml(trip.weather)}${trip.temperature_c !== null ? ` · ${trip.temperature_c}°C` : ''}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
+    const conditions = [
+      trip.temperature_c !== null && trip.temperature_c !== undefined ? `<span><i class="bi bi-thermometer-half text-danger me-1"></i>${trip.temperature_c}°C</span>` : '',
+      trip.weather ? `<span><i class="bi bi-cloud-sun me-1"></i>${escapeHtml(trip.weather)}</span>` : '',
+      trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `<span><i class="bi bi-wind me-1"></i>${trip.wind_kmh} km/h</span>` : ''
+    ].filter(Boolean).join('');
+    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
 }
 
