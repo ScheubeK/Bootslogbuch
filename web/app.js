@@ -290,6 +290,7 @@ function localDateTime(value) {
 function renderLiveTrip() {
   const isActive = Boolean(state.activeTrip);
   element('liveTripCard').classList.toggle('is-active', isActive);
+  element('livePropeller').classList.toggle('d-none', !isActive);
   element('liveTripSwitch').checked = isActive;
   element('liveTripStatus').textContent = isActive ? 'Ausflug läuft… ⛵' : 'Bereit zum Ablegen…';
   element('liveTripHint').textContent = isActive
