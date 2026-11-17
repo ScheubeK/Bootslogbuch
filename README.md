@@ -9,7 +9,8 @@ auf dem Branch [`apps-script`](https://github.com/ScheubeK/Bootslogbuch/tree/app
 - **Cloudflare Pages** liefert die statische Web-App aus `web/` aus.
 - **Cloudflare Pages Functions** stellt unter `/api/config` die öffentliche
   Supabase-Browserkonfiguration bereit.
-- **Supabase Auth** meldet Personen per Magic Link an.
+- **Supabase Auth** meldet Personen primär über Google und optional per Magic
+  Link an.
 - **Supabase PostgreSQL** speichert Boote, Crew, Ausflüge und Kosten.
 - **Supabase Row Level Security** erlaubt Zugriff ausschließlich auf die Boote,
   deren Crew ein Benutzer angehört.
@@ -30,7 +31,32 @@ Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
 Owner-Rolle versehentlich löscht.
 
-## Magic Link konfigurieren
+## Anmeldung konfigurieren
+
+### Google Login (empfohlen)
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/) ein Projekt
+   anlegen oder auswählen und unter **APIs & Services → OAuth consent screen**
+   eine externe OAuth-App einrichten. Solange sie im Testmodus ist, die E-Mail-
+   Adressen der Testpersonen als *Test users* hinzufügen.
+2. Unter **Credentials → Create credentials → OAuth client ID** den Typ
+   **Web application** wählen.
+3. Bei **Authorized redirect URIs** exakt diese Adresse eintragen (Project Ref
+   aus der Supabase-URL übernehmen):
+
+   ```text
+   https://DEIN-PROJECT-REF.supabase.co/auth/v1/callback
+   ```
+
+4. Client ID und Client Secret kopieren. In Supabase unter
+   **Authentication → Providers → Google** Google aktivieren und beide Werte
+   eintragen.
+
+Crew-Mitglieder müssen sich mit dem Google-Konto anmelden, dessen E-Mail-
+Adresse bei der Einladung verwendet wurde. Der Einladungsparameter bleibt
+auch über die Google-Anmeldung erhalten.
+
+### Magic Link (optionaler Fallback)
 
 In Supabase unter **Authentication → Providers → Email** muss E-Mail aktiviert
 sein. Für lokale Entwicklung wird als Site URL `http://localhost:5173` und als
@@ -44,9 +70,9 @@ https://DEIN-PROJEKT.pages.dev/**
 https://DEINE-EIGENE-DOMAIN/**
 ```
 
-Die Standard-E-Mailzustellung von Supabase reicht für erste Tests. Vor einem
-öffentlichen Start sollte ein eigener SMTP-Anbieter (zum Beispiel Resend) in
-Supabase hinterlegt werden, damit Login- und Einladungs-E-Mails zuverlässig
+Die Standard-E-Mailzustellung von Supabase ist nur ein Fallback für erste
+Tests. Vor einem öffentlichen Start sollte ein eigener SMTP-Anbieter (zum
+Beispiel Resend) in Supabase hinterlegt werden, damit Magic Links zuverlässig
 zugestellt werden.
 
 ## Cloudflare Pages bereitstellen
@@ -73,7 +99,7 @@ verwendet.
 
 ## Funktionsumfang der ersten Cloud-Version
 
-- Magic-Link-Anmeldung und selbstständige Bootserstellung für Kapitäne
+- Google-Anmeldung und optionale Magic-Link-Anmeldung
 - mehrere Boote pro Benutzer
 - Crew-Rollen `Owner` und `Crew`
 - Ausflüge und Kosten erfassen, bearbeiten und löschen

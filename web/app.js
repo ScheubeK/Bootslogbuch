@@ -52,6 +52,7 @@ async function initialize() {
 
 function registerEvents() {
   element('loginForm').addEventListener('submit', sendMagicLink);
+  element('googleLoginButton').addEventListener('click', signInWithGoogle);
   element('createBoatForm').addEventListener('submit', createBoat);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
@@ -98,6 +99,24 @@ async function sendMagicLink(event) {
   setBusy(button, false, 'Login-Link senden');
   if (error) return showNotice(error.message, 'danger');
   showNotice(`Login-Link wurde an ${email} gesendet.`, 'success');
+}
+
+async function signInWithGoogle(event) {
+  if (!state.client) return;
+  const button = event.currentTarget;
+  setBusy(button, true, 'Google-Anmeldung wird geöffnet…');
+  // Eine Crew-Einladung enthält ?invite=<token>. Dieser Parameter muss nach
+  // dem OAuth-Login erhalten bleiben, damit die Einladung angenommen wird.
+  const redirectUrl = new URL(window.location.href);
+  redirectUrl.hash = '';
+  const { error } = await state.client.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: redirectUrl.toString() }
+  });
+  if (error) {
+    setBusy(button, false, 'Mit Google anmelden');
+    showNotice(error.message, 'danger');
+  }
 }
 
 async function loadProfileAndBoats() {
