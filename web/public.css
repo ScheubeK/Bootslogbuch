@@ -1,0 +1,13 @@
+:root { color-scheme: light; }
+body { background: linear-gradient(160deg, #eff7ff 0, #f7f9fc 46%, #eef7f3 100%); color: #263544; min-height: 100vh; }
+.public-shell { max-width: 780px; }
+.public-nav { min-height: 72px; }
+.public-brand { color: #173f67; font-weight: 700; text-decoration: none; }
+.public-logo { width: 42px; height: 42px; object-fit: cover; border: 2px solid #0d6efd; border-radius: 50%; background: #fff; box-shadow: 0 .2rem .6rem rgba(13, 110, 253, .2); }
+.public-hero { padding: 3.5rem 1.5rem; border-radius: 1.5rem; background: linear-gradient(135deg, #0d6efd, #176b93); color: #fff; box-shadow: 0 .8rem 2rem rgba(17, 82, 150, .18); }
+.public-card { border: 0; border-radius: 1rem; box-shadow: 0 .2rem .9rem rgba(27, 50, 70, .08); }
+.public-footer { color: #627181; font-size: .875rem; }
+.public-footer a { color: inherit; }
+.legal-copy h2 { margin-top: 2rem; font-size: 1.2rem; }
+.legal-copy h3 { margin-top: 1.4rem; font-size: 1rem; }
+.legal-copy p, .legal-copy li { line-height: 1.65; }
