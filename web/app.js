@@ -14,7 +14,7 @@ const state = {
   selectedYear: String(new Date().getFullYear())
 };
 
-const categories = ['Benzin', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt'];
+const categories = ['Treibstoff', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt'];
 const money = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' });
 const number = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
 const defaultWeatherLocation = 'Hergiswil NW, Schweiz';
@@ -605,11 +605,11 @@ function renderCosts() {
   element('costList').innerHTML = costs.length ? costs.map(cost => `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div></div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article>`).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Kosten erfasst.</div>';
 }
 
-function updateFuelFields() { document.querySelectorAll('.fuel-only').forEach(field => field.classList.toggle('d-none', element('costCategory').value !== 'Benzin')); }
+function updateFuelFields() { document.querySelectorAll('.fuel-only').forEach(field => field.classList.toggle('d-none', element('costCategory').value !== 'Treibstoff')); }
 function resetCostForm(show) { element('costForm').classList.toggle('d-none', !show); if (!show) { element('costForm').reset(); element('costId').value = ''; return; } element('costForm').reset(); element('costId').value = ''; element('costDate').value = new Date().toISOString().slice(0, 10); updateFuelFields(); element('costForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 async function saveCost(event) {
   event.preventDefault();
-  const id = element('costId').value, isFuel = element('costCategory').value === 'Benzin';
+  const id = element('costId').value, isFuel = element('costCategory').value === 'Treibstoff';
   const values = { boat_id: state.boat.id, cost_date: element('costDate').value, category: element('costCategory').value, description: element('costDescription').value.trim(), amount_chf: numberOrZero(element('costAmount').value), litres: isFuel && element('costLitres').value !== '' ? numberOrZero(element('costLitres').value) : null, price_per_litre: isFuel && element('costPrice').value !== '' ? numberOrZero(element('costPrice').value) : null };
   if (!id) values.created_by = state.user.id;
   const { error } = await (id ? state.client.from('costs').update(values).eq('id', id) : state.client.from('costs').insert(values));
@@ -753,7 +753,9 @@ function parseImportedCosts(rows) {
   return rows.map((row, index) => {
     const prefix = `Kosten, Zeile ${index + 2}`;
     const categoryValue = String(importValue(row, ['kategorie']) ?? '').trim();
-    const category = categories.find(item => normaliseImportHeader(item) === normaliseImportHeader(categoryValue));
+    // Bereits exportierte Dateien mit der früheren Bezeichnung bleiben importierbar.
+    const normalisedCategory = normaliseImportHeader(categoryValue) === 'benzin' ? 'Treibstoff' : categoryValue;
+    const category = categories.find(item => normaliseImportHeader(item) === normaliseImportHeader(normalisedCategory));
     if (!category) throw new Error(`${prefix}: Kategorie ist ungültig.`);
     const amount = importNumber(importValue(row, ['betragchf', 'betrag']), `${prefix}: Betrag`, true);
     const litres = importNumber(importValue(row, ['liter', 'litres']), `${prefix}: Liter`);
@@ -762,7 +764,7 @@ function parseImportedCosts(rows) {
     return {
       cost_date: importCostDate(importValue(row, ['datum']), `${prefix}: Datum`), category,
       description: String(importValue(row, ['beschreibung']) ?? '').trim(), amount_chf: amount,
-      litres: category === 'Benzin' ? litres : null, price_per_litre: category === 'Benzin' ? price : null
+      litres: category === 'Treibstoff' ? litres : null, price_per_litre: category === 'Treibstoff' ? price : null
     };
   });
 }

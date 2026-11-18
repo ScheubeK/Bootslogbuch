@@ -5,7 +5,7 @@
 create extension if not exists pgcrypto;
 
 create type public.boat_role as enum ('owner', 'crew');
-create type public.cost_category as enum ('Benzin', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt');
+create type public.cost_category as enum ('Treibstoff', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt');
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -75,8 +75,8 @@ create table public.costs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (
-    (category = 'Benzin' and (litres is null or price_per_litre is null or litres * price_per_litre >= 0))
-    or (category <> 'Benzin' and litres is null and price_per_litre is null)
+    (category = 'Treibstoff' and (litres is null or price_per_litre is null or litres * price_per_litre >= 0))
+    or (category <> 'Treibstoff' and litres is null and price_per_litre is null)
   )
 );
 

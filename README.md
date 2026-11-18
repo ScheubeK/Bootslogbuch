@@ -30,6 +30,7 @@ Supabase **SQL Editor** ausgeführt:
 4. `202611170004_boat_weather_location.sql`
 5. `202611170005_reset_boat_data.sql`
 6. `202611170006_import_boat_backup.sql`
+7. `202611180001_rename_benzin_to_treibstoff.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
