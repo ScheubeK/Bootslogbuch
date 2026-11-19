@@ -68,10 +68,23 @@ Crew-Mitglieder müssen sich mit dem Google-Konto anmelden, dessen E-Mail-
 Adresse bei der Einladung verwendet wurde. Der Einladungsparameter bleibt
 auch über die Google-Anmeldung erhalten.
 
-### Magic Link (optionaler Fallback)
+### E-Mail und Passwort
 
 In Supabase unter **Authentication → Providers → Email** muss E-Mail aktiviert
-sein. Für lokale Entwicklung wird als Site URL `http://localhost:5173` und als
+sein. Neben der Google-Anmeldung bietet die App eine Anmeldung mit E-Mail-Adresse
+und Passwort. Das Passwort wird ausschliesslich von Supabase Auth als sicherer
+Hash gespeichert; es wird nie in der App-Datenbank abgelegt. Die App verlangt
+mindestens 12 Zeichen sowie Gross- und Kleinbuchstaben, Zahl und Sonderzeichen.
+
+Bestehende Magic-Link-Nutzer wählen bei ihrer ersten E-Mail-/Passwort-Anmeldung
+**„Passwort einrichten / vergessen“**. Sie erhalten dafür einmalig einen Link
+zum Setzen ihres Passworts.
+
+E-Mail-Bestätigungen und Passwort-Resets benötigen weiterhin E-Mail-Versand.
+Für einen öffentlichen Start empfiehlt sich deshalb ein eigener SMTP-Anbieter
+(zum Beispiel Resend), damit diese seltenen E-Mails zuverlässig zugestellt werden.
+
+Für lokale Entwicklung wird als Site URL `http://localhost:5173` und als
 Redirect URL `http://localhost:5173/**` verwendet.
 
 Nach dem ersten Cloudflare-Deployment kommen zusätzlich diese Redirect URLs
@@ -84,8 +97,8 @@ https://DEINE-EIGENE-DOMAIN/**
 
 Die Standard-E-Mailzustellung von Supabase ist nur ein Fallback für erste
 Tests. Vor einem öffentlichen Start sollte ein eigener SMTP-Anbieter (zum
-Beispiel Resend) in Supabase hinterlegt werden, damit Magic Links zuverlässig
-zugestellt werden.
+Beispiel Resend) in Supabase hinterlegt werden, damit Bestätigungs- und
+Passwort-Reset-E-Mails zuverlässig zugestellt werden.
 
 ## Cloudflare Pages bereitstellen
 

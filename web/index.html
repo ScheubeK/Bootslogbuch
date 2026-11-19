@@ -30,12 +30,17 @@
         <button id="googleLoginButton" class="btn btn-outline-dark btn-lg w-100" type="button"><i class="bi bi-google me-2"></i>Mit Google anmelden</button>
         <p class="small text-secondary text-center mt-3 mb-0">Melde dich mit dem Google-Konto an, dessen E-Mail-Adresse für die Crew-Einladung verwendet wurde.</p>
         <div class="d-flex align-items-center gap-2 my-4 text-secondary small"><hr class="flex-grow-1 my-0"><span>oder</span><hr class="flex-grow-1 my-0"></div>
-        <form id="loginForm">
-          <label class="form-label" for="loginEmail">E-Mail-Adresse</label>
-          <input id="loginEmail" class="form-control form-control-lg" type="email" autocomplete="email" required placeholder="name@beispiel.ch">
-          <button class="btn btn-outline-primary btn-lg w-100 mt-3" type="submit">Login-Link senden</button>
-        </form>
-        <p class="small text-secondary text-center mt-3 mb-0">Alternativ: sicherer Login-Link per E-Mail.</p>
+        <section id="emailAuthPanel">
+          <h2 class="h5 text-center mb-3" id="emailAuthTitle">Mit E-Mail anmelden</h2>
+          <form id="emailAuthForm">
+            <div id="loginEmailGroup"><label class="form-label" for="loginEmail">E-Mail-Adresse</label><input id="loginEmail" class="form-control form-control-lg" type="email" autocomplete="email" required placeholder="name@beispiel.ch"></div>
+            <div id="loginPasswordGroup" class="mt-3"><label class="form-label" for="loginPassword">Passwort</label><input id="loginPassword" class="form-control form-control-lg" type="password" autocomplete="current-password" required></div>
+            <div id="loginPasswordConfirmGroup" class="mt-3 d-none"><label class="form-label" for="loginPasswordConfirm">Passwort wiederholen</label><input id="loginPasswordConfirm" class="form-control form-control-lg" type="password" autocomplete="new-password"><div class="form-text">Mindestens 12 Zeichen, Gross- und Kleinbuchstabe, Zahl und Sonderzeichen.</div></div>
+            <p id="emailAuthHint" class="small text-secondary mt-3 mb-0">Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.</p>
+            <button id="emailAuthSubmit" class="btn btn-outline-primary btn-lg w-100 mt-3" type="submit">Anmelden</button>
+          </form>
+          <div class="text-center small mt-3"><button id="showRegistrationButton" class="btn btn-link btn-sm" type="button">Neues Konto erstellen</button><button id="showPasswordResetButton" class="btn btn-link btn-sm" type="button">Passwort einrichten / vergessen</button><button id="backToLoginButton" class="btn btn-link btn-sm d-none" type="button">Zurück zur Anmeldung</button></div>
+        </section>
         <div class="small text-secondary text-center mt-4"><a href="./info.html">About Bootslogbuch</a><span class="mx-1">·</span><a href="./privacy.html">Datenschutz</a><span class="mx-1">·</span><a href="./terms.html">Nutzungsbedingungen</a></div>
       </div>
     </section>

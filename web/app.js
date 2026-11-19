@@ -11,6 +11,8 @@ const state = {
   activeTrip: null,
   finishingLiveTrip: false,
   weatherRequestId: 0,
+  authMode: 'signin',
+  passwordRecovery: false,
   selectedYear: String(new Date().getFullYear())
 };
 
@@ -54,7 +56,10 @@ async function initialize() {
     state.client = supabase.createClient(config.url, config.anonKey, {
       auth: { detectSessionInUrl: true, persistSession: true, flowType: 'pkce' }
     });
-    state.client.auth.onAuthStateChange((_event, session) => window.setTimeout(() => handleSession(session), 0));
+    state.client.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') state.passwordRecovery = true;
+      window.setTimeout(() => handleSession(session), 0);
+    });
     const { data: { session }, error } = await state.client.auth.getSession();
     if (error) throw error;
     await handleSession(session);
@@ -65,8 +70,12 @@ async function initialize() {
 }
 
 function registerEvents() {
-  element('loginForm').addEventListener('submit', sendMagicLink);
+  element('emailAuthForm').addEventListener('submit', submitEmailAuth);
   element('googleLoginButton').addEventListener('click', signInWithGoogle);
+  element('showRegistrationButton').addEventListener('click', () => setAuthMode('signup'));
+  element('showPasswordResetButton').addEventListener('click', () => setAuthMode('reset'));
+  element('backToLoginButton').addEventListener('click', () => setAuthMode('signin'));
+  ['loginPassword', 'loginPasswordConfirm'].forEach(id => element(id).addEventListener('input', validatePasswordInputs));
   element('createBoatForm').addEventListener('submit', createBoat);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
@@ -102,6 +111,14 @@ function registerEvents() {
 async function handleSession(session) {
   if (!session?.user) {
     state.user = null;
+    state.passwordRecovery = false;
+    setAuthMode('signin');
+    showScreen('loginScreen');
+    return;
+  }
+  if (state.passwordRecovery || new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery') {
+    state.passwordRecovery = true;
+    setAuthMode('recovery');
     showScreen('loginScreen');
     return;
   }
@@ -109,23 +126,95 @@ async function handleSession(session) {
   await loadProfileAndBoats();
 }
 
-async function sendMagicLink(event) {
-  event.preventDefault();
-  if (!state.client) return;
-  const button = event.currentTarget.querySelector('button');
-  setBusy(button, true, 'Wird gesendet…');
-  const email = element('loginEmail').value.trim().toLowerCase();
-  // Eine Crew-Einladung enthält ?invite=<token>. Der Parameter muss nach dem
-  // Magic-Link-Login noch vorhanden sein, damit sie automatisch angenommen wird.
+function setAuthMode(mode) {
+  state.authMode = mode;
+  const isSignIn = mode === 'signin';
+  const isSignUp = mode === 'signup';
+  const isReset = mode === 'reset';
+  const isRecovery = mode === 'recovery';
+  const password = element('loginPassword');
+  const confirmation = element('loginPasswordConfirm');
+  const email = element('loginEmail');
+  element('loginEmailGroup').classList.toggle('d-none', isRecovery);
+  element('loginPasswordGroup').classList.toggle('d-none', isReset);
+  element('loginPasswordConfirmGroup').classList.toggle('d-none', !(isSignUp || isRecovery));
+  element('showRegistrationButton').classList.toggle('d-none', !isSignIn);
+  element('showPasswordResetButton').classList.toggle('d-none', !isSignIn);
+  element('backToLoginButton').classList.toggle('d-none', isSignIn || isRecovery);
+  password.required = !isReset;
+  confirmation.required = isSignUp || isRecovery;
+  email.required = !isRecovery;
+  password.autocomplete = isSignIn ? 'current-password' : 'new-password';
+  element('emailAuthTitle').textContent = isSignUp ? 'Konto erstellen' : isReset ? 'Passwort einrichten' : isRecovery ? 'Neues Passwort setzen' : 'Mit E-Mail anmelden';
+  element('emailAuthSubmit').textContent = isSignUp ? 'Konto erstellen' : isReset ? 'Link zum Passwort setzen senden' : isRecovery ? 'Neues Passwort speichern' : 'Anmelden';
+  element('emailAuthHint').textContent = isSignUp
+    ? 'Verwende dieselbe E-Mail-Adresse, an welche deine Crew-Einladung ging.'
+    : isReset
+      ? 'Auch bestehende Magic-Link-Nutzer können hier einmalig ein Passwort festlegen.'
+      : isRecovery
+        ? 'Wähle ein neues, sicheres Passwort für dein Konto.'
+        : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
+  if (isReset || isRecovery) {
+    password.value = '';
+    confirmation.value = '';
+    password.setCustomValidity('');
+    confirmation.setCustomValidity('');
+  }
+}
+
+function passwordValidationMessage(password) {
+  if (password.length < 12) return 'Das Passwort muss mindestens 12 Zeichen enthalten.';
+  if (!/[a-z]/.test(password)) return 'Das Passwort muss einen Kleinbuchstaben enthalten.';
+  if (!/[A-Z]/.test(password)) return 'Das Passwort muss einen Grossbuchstaben enthalten.';
+  if (!/\d/.test(password)) return 'Das Passwort muss eine Zahl enthalten.';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Das Passwort muss ein Sonderzeichen enthalten.';
+  return '';
+}
+
+function validatePasswordInputs() {
+  const password = element('loginPassword');
+  const confirmation = element('loginPasswordConfirm');
+  const needsStrongPassword = state.authMode === 'signup' || state.authMode === 'recovery';
+  password.setCustomValidity(needsStrongPassword ? passwordValidationMessage(password.value) : '');
+  confirmation.setCustomValidity(confirmation.value && confirmation.value !== password.value ? 'Die Passwörter stimmen nicht überein.' : '');
+}
+
+function authRedirectUrl() {
   const redirectUrl = new URL(window.location.href);
   redirectUrl.hash = '';
-  const { error } = await state.client.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: redirectUrl.toString() }
-  });
-  setBusy(button, false, 'Login-Link senden');
-  if (error) return showNotice(error.message, 'danger');
-  showNotice(`Login-Link wurde an ${email} gesendet.`, 'success');
+  return redirectUrl.toString();
+}
+
+async function submitEmailAuth(event) {
+  event.preventDefault();
+  if (!state.client) return;
+  validatePasswordInputs();
+  if (!event.currentTarget.reportValidity()) return;
+  const button = element('emailAuthSubmit');
+  const email = element('loginEmail').value.trim().toLowerCase();
+  const password = element('loginPassword').value;
+  const mode = state.authMode;
+  setBusy(button, true, mode === 'signin' ? 'Anmeldung läuft…' : mode === 'signup' ? 'Konto wird erstellt…' : mode === 'recovery' ? 'Passwort wird gespeichert…' : 'Link wird gesendet…');
+  let error;
+  if (mode === 'signin') ({ error } = await state.client.auth.signInWithPassword({ email, password }));
+  if (mode === 'signup') ({ error } = await state.client.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } }));
+  if (mode === 'reset') ({ error } = await state.client.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() }));
+  if (mode === 'recovery') ({ error } = await state.client.auth.updateUser({ password }));
+  if (error) {
+    setBusy(button, false, mode === 'signin' ? 'Anmelden' : mode === 'signup' ? 'Konto erstellen' : mode === 'recovery' ? 'Neues Passwort speichern' : 'Link zum Passwort setzen senden');
+    return showNotice(error.message, 'danger');
+  }
+  if (mode === 'signup') {
+    setAuthMode('signin');
+    return showNotice(`Konto angelegt. Prüfe ${email}, um die E-Mail-Adresse zu bestätigen.`, 'success');
+  }
+  if (mode === 'reset') return showNotice(`Ein Link zum Setzen deines Passworts wurde an ${email} gesendet.`, 'success');
+  if (mode === 'recovery') {
+    state.passwordRecovery = false;
+    window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    await handleSession((await state.client.auth.getSession()).data.session);
+    return showNotice('Passwort gespeichert. Du bist jetzt angemeldet.');
+  }
 }
 
 async function signInWithGoogle(event) {
