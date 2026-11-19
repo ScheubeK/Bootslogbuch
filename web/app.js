@@ -138,7 +138,7 @@ function setAuthMode(mode) {
   element('loginEmailGroup').classList.toggle('d-none', isRecovery);
   element('loginPasswordGroup').classList.toggle('d-none', isReset);
   element('loginPasswordConfirmGroup').classList.toggle('d-none', !(isSignUp || isRecovery));
-  element('showRegistrationButton').classList.toggle('d-none', !isSignIn);
+  element('registrationCallout').classList.toggle('d-none', !isSignIn);
   element('showPasswordResetButton').classList.toggle('d-none', !isSignIn);
   element('backToLoginButton').classList.toggle('d-none', isSignIn || isRecovery);
   password.required = !isReset;
