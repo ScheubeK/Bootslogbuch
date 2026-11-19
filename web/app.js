@@ -237,10 +237,23 @@ async function signInWithGoogle(event) {
 
 async function loadProfileAndBoats() {
   const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
-    state.client.from('profiles').select('id, email, display_name').eq('id', state.user.id).single(),
+    state.client.from('profiles').select('id, email, display_name').eq('id', state.user.id).maybeSingle(),
     state.client.from('boat_memberships').select('boat_id, role, boats(id, name)').eq('user_id', state.user.id)
   ]);
   if (profileError || membershipError) return showNotice((profileError || membershipError).message, 'danger');
+  if (!profile) {
+    // Ein in Supabase gelöschtes Konto kann lokal noch eine alte Sitzung haben.
+    // Diese entfernen wir, damit die Login-Seite statt eines Datenbankfehlers erscheint.
+    await state.client.auth.signOut({ scope: 'local' });
+    state.user = null;
+    state.profile = null;
+    state.boats = [];
+    state.boat = null;
+    setAuthMode('signin');
+    showScreen('loginScreen');
+    showNotice('Deine frühere Anmeldung ist nicht mehr gültig. Bitte melde dich erneut an.', 'warning');
+    return;
+  }
   state.profile = profile;
   state.boats = (memberships || []).map(boatFromMembership).filter(boat => boat.name);
 
