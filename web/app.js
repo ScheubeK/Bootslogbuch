@@ -750,7 +750,7 @@ async function renderCrew() {
     const canRemove = isOwner && member.role === 'crew';
     return `<article class="card entry-card"><div class="card-body py-3 d-flex justify-content-between gap-3"><div><strong>${escapeHtml(member.profiles?.display_name || member.profiles?.email || 'Crewmitglied')}</strong><div class="small text-secondary">${escapeHtml(member.profiles?.email || '')}</div></div><div class="d-flex flex-column align-items-end gap-2"><span class="badge ${member.role === 'owner' ? 'text-bg-primary' : 'text-bg-light'}">${member.role === 'owner' ? 'Kapitän' : 'Crew'}</span>${canRemove ? `<button class="btn btn-outline-danger btn-sm" onclick="removeCrewMember('${member.user_id}')"><i class="bi bi-person-dash me-1"></i>Entfernen</button>` : ''}</div></div></article>`;
   }).join('') || '<div class="empty-state">Noch keine Crewmitglieder.</div>';
-  element('invitationList').innerHTML = isOwner && invitations?.length ? `<div class="small text-secondary mt-2">Offene Einladungen</div>${invitations.map(invitation => `<article class="card entry-card"><div class="card-body py-3"><strong>${escapeHtml(invitation.email)}</strong><div class="small text-secondary mt-1">Gültig bis ${new Date(invitation.expires_at).toLocaleDateString('de-CH')}</div><button class="btn btn-outline-primary btn-sm mt-2" onclick="copyInvitation('${invitation.token}')"><i class="bi bi-link-45deg me-1"></i>Einladungslink kopieren</button></div></article>`).join('')}` : '';
+  element('invitationList').innerHTML = isOwner && invitations?.length ? `<div class="small text-secondary mt-2">Offene Einladungen</div>${invitations.map(invitation => `<article class="card entry-card"><div class="card-body py-3"><strong>${escapeHtml(invitation.email)}</strong><div class="small text-secondary mt-1">Gültig bis ${new Date(invitation.expires_at).toLocaleDateString('de-CH')}</div><div class="d-flex flex-wrap gap-2 mt-2"><button class="btn btn-outline-primary btn-sm" onclick="copyInvitation('${invitation.token}')"><i class="bi bi-link-45deg me-1"></i>Einladungslink kopieren</button><button class="btn btn-outline-danger btn-sm" onclick="revokeInvitation('${invitation.id}')"><i class="bi bi-x-circle me-1"></i>Zurückziehen</button></div></div></article>`).join('')}` : '';
 }
 
 async function createInvitation(event) {
@@ -761,6 +761,14 @@ async function createInvitation(event) {
   element('inviteEmail').value = ''; await renderCrew(); showNotice('Einladung erstellt. Kopiere nun den Einladungslink.');
 }
 window.copyInvitation = async token => { const link = `${window.location.origin}${window.location.pathname}?invite=${token}`; try { await navigator.clipboard.writeText(link); showNotice('Einladungslink kopiert.'); } catch (_) { window.prompt('Einladungslink kopieren:', link); } };
+window.revokeInvitation = async id => {
+  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann Einladungen zurückziehen.', 'danger');
+  if (!confirm('Diese Einladung wirklich zurückziehen? Der bisherige Einladungslink wird sofort ungültig.')) return;
+  const { error } = await state.client.from('boat_invitations').delete().eq('id', id).eq('boat_id', state.boat.id).is('accepted_at', null);
+  if (error) return showNotice(error.message, 'danger');
+  await renderCrew();
+  showNotice('Einladung zurückgezogen.');
+};
 window.removeCrewMember = async userId => {
   if (state.role !== 'owner') return showNotice('Nur der Kapitän kann Crewmitglieder entfernen.', 'danger');
   const member = await state.client.from('boat_memberships').select('profiles(email, display_name)').eq('boat_id', state.boat.id).eq('user_id', userId).eq('role', 'crew').maybeSingle();
