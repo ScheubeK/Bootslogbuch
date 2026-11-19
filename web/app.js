@@ -70,6 +70,10 @@ function registerEvents() {
   element('createBoatForm').addEventListener('submit', createBoat);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
+  element('boatSwitchList').addEventListener('click', event => {
+    const button = event.target.closest('[data-boat-id]');
+    if (button) selectBoat(button.dataset.boatId);
+  });
   element('showTripForm').addEventListener('click', () => resetTripForm(true));
   element('cancelTripForm').addEventListener('click', () => resetTripForm(false));
   element('tripForm').addEventListener('submit', saveTrip);
@@ -798,7 +802,27 @@ async function importExcel(event) {
 }
 
 function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') renderCrew(); }
-async function switchBoat() { if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.'); const choices = state.boats.map((boat, index) => `${index + 1}: ${boat.name}`).join('\n'); const selected = Number(window.prompt(`Boot auswählen:\n${choices}`)); if (!selected || !state.boats[selected - 1]) return; state.boat = state.boats[selected - 1]; state.role = state.boat.role; localStorage.setItem(`bootslogbuch.boat.${state.user.id}`, state.boat.id); await loadBoatData(); showView('dashboard'); }
+function switchBoat() {
+  if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.');
+  element('boatSwitchList').innerHTML = state.boats.map(boat => {
+    const isCurrent = boat.id === state.boat.id;
+    const role = boat.role === 'owner' ? 'Kapitän' : 'Crew';
+    return `<button class="list-group-item list-group-item-action boat-switch-option${isCurrent ? ' active' : ''}" type="button" data-boat-id="${boat.id}"${isCurrent ? ' aria-current="true"' : ''}><span class="d-flex align-items-center gap-3"><i class="bi ${isCurrent ? 'bi-check-circle-fill' : 'bi-sailboat'} fs-5"></i><span class="text-start flex-grow-1"><strong class="d-block text-truncate">${escapeHtml(boat.name)}</strong><small>${isCurrent ? 'Aktuell geöffnet · ' : ''}${role}</small></span></span></button>`;
+  }).join('');
+  bootstrap.Modal.getOrCreateInstance(element('boatSwitchModal')).show();
+}
+
+async function selectBoat(boatId) {
+  const selectedBoat = state.boats.find(boat => boat.id === boatId);
+  if (!selectedBoat || selectedBoat.id === state.boat.id) return;
+  bootstrap.Modal.getOrCreateInstance(element('boatSwitchModal')).hide();
+  state.boat = selectedBoat;
+  state.role = selectedBoat.role;
+  localStorage.setItem(`bootslogbuch.boat.${state.user.id}`, selectedBoat.id);
+  await loadBoatData();
+  showView('dashboard');
+  showNotice(`Zu „${selectedBoat.name}“ gewechselt.`);
+}
 async function signOut() { await state.client.auth.signOut(); showNotice('Abgemeldet.'); }
 function showScreen(id) { ['loadingScreen', 'loginScreen', 'setupScreen', 'appScreen'].forEach(screenId => element(screenId).classList.toggle('d-none', screenId !== id)); }
 function showNotice(message, variant = 'success') { const notice = element('notice'); notice.className = `alert alert-${variant}`; notice.textContent = message; notice.classList.remove('d-none'); window.clearTimeout(showNotice.timeout); showNotice.timeout = window.setTimeout(() => notice.classList.add('d-none'), 5000); }
