@@ -76,7 +76,6 @@ function registerEvents() {
   });
   element('showTripForm').addEventListener('click', () => resetTripForm(true));
   element('cancelTripForm').addEventListener('click', () => state.finishingLiveTrip ? cancelLiveTrip() : resetTripForm(false));
-  element('cancelLiveTripButton').addEventListener('click', cancelLiveTrip);
   element('tripForm').addEventListener('submit', saveTrip);
   element('showCostForm').addEventListener('click', () => resetCostForm(true));
   element('cancelCostForm').addEventListener('click', () => resetCostForm(false));
@@ -388,7 +387,6 @@ function renderLiveTrip() {
   element('livePropeller').classList.toggle('d-none', !isRunning);
   element('liveTripSwitch').checked = isRunning;
   element('liveTripSwitch').disabled = state.finishingLiveTrip;
-  element('cancelLiveTripButton').classList.toggle('d-none', !state.finishingLiveTrip);
   element('liveTripStatus').textContent = isRunning ? 'Ausflug läuft…' : state.activeTrip ? 'Ausflug beenden und speichern…' : 'Bereit zum Ablegen…';
   element('liveTripHint').textContent = isRunning
     ? `Gestartet am ${new Date(state.activeTrip.started_at).toLocaleString('de-CH')}. Zum Beenden den Schalter ausschalten.`
