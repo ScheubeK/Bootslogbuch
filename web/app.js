@@ -1077,6 +1077,8 @@ function renderCostSharing() {
     ? 'Diese Personen werden bei neuen geteilten Kosten standardmässig berücksichtigt. Bestehende Abrechnungen bleiben unverändert.'
     : 'Die Kostenbeteiligten werden vom Kapitän verwaltet. Bestehende Abrechnungen bleiben unverändert.';
   element('costSharingYear').textContent = state.selectedYear;
+  const sharedCostTotal = currentCosts().filter(cost => isSharedCost(cost.id)).reduce((total, cost) => total + numberOrZero(cost.amount_chf), 0);
+  element('costSharingTotal').textContent = `Gemeinsame Kosten: ${formatCurrency(sharedCostTotal)}`;
   const hasParticipants = state.costParticipants.length > 0;
   const balances = calculateCostBalances();
   element('costBalanceList').innerHTML = hasParticipants ? balances.map(item => {
