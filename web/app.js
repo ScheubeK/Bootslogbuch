@@ -78,6 +78,8 @@ function registerEvents() {
   element('backToLoginButton').addEventListener('click', () => setAuthMode('signin'));
   ['loginPassword', 'loginPasswordConfirm'].forEach(id => element(id).addEventListener('input', validatePasswordInputs));
   element('createBoatForm').addEventListener('submit', createBoat);
+  element('createOwnBoatForm').addEventListener('submit', createBoat);
+  element('createOwnBoatButton').addEventListener('click', showCreateOwnBoatDialog);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
   element('boatSwitchList').addEventListener('click', event => {
@@ -300,13 +302,19 @@ async function loadWeatherSettings() {
 
 async function createBoat(event) {
   event.preventDefault();
-  const button = event.currentTarget.querySelector('button');
+  const form = event.currentTarget;
+  const isAdditionalBoat = form.id === 'createOwnBoatForm';
+  const nameInput = element(isAdditionalBoat ? 'ownBoatName' : 'boatName');
+  const button = form.querySelector('button[type="submit"]');
   setBusy(button, true, 'Wird angelegt…');
-  const { error } = await state.client.rpc('create_boat', { boat_name: element('boatName').value.trim() });
+  const { data: boatId, error } = await state.client.rpc('create_boat', { boat_name: nameInput.value.trim() });
   setBusy(button, false, 'Boot anlegen');
   if (error) return showNotice(error.message, 'danger');
-  element('boatName').value = '';
+  nameInput.value = '';
+  if (boatId) localStorage.setItem(`bootslogbuch.boat.${state.user.id}`, boatId);
+  if (isAdditionalBoat) bootstrap.Modal.getOrCreateInstance(element('createOwnBoatModal')).hide();
   await loadProfileAndBoats();
+  if (isAdditionalBoat) showView('dashboard');
   showNotice('Boot angelegt. Du bist als Kapitän eingetragen.');
 }
 
@@ -961,6 +969,12 @@ function switchBoat() {
     return `<button class="list-group-item list-group-item-action boat-switch-option${isCurrent ? ' active' : ''}" type="button" data-boat-id="${boat.id}"${isCurrent ? ' aria-current="true"' : ''}><span class="d-flex align-items-center gap-3"><i class="bi ${isCurrent ? 'bi-check-circle-fill' : 'bi-sailboat'} fs-5"></i><span class="text-start flex-grow-1"><strong class="d-block text-truncate">${escapeHtml(boat.name)}</strong><small>${isCurrent ? 'Aktuell geöffnet · ' : ''}${role}</small></span></span></button>`;
   }).join('');
   bootstrap.Modal.getOrCreateInstance(element('boatSwitchModal')).show();
+}
+
+function showCreateOwnBoatDialog() {
+  element('ownBoatName').value = '';
+  bootstrap.Modal.getOrCreateInstance(element('createOwnBoatModal')).show();
+  window.setTimeout(() => element('ownBoatName').focus(), 150);
 }
 
 async function selectBoat(boatId) {

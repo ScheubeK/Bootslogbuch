@@ -71,6 +71,7 @@
         <div class="dropdown">
           <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="dropdown" aria-label="Menü"><i class="bi bi-three-dots-vertical"></i></button>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" id="createOwnBoatButton"><i class="bi bi-plus-circle me-2"></i>Eigenes Boot anlegen</button></li>
             <li><button class="dropdown-item" id="switchBoatButton"><i class="bi bi-arrow-left-right me-2"></i>Boot wechseln</button></li>
             <li><hr class="dropdown-divider"></li>
             <li><button class="dropdown-item text-danger" id="signOutButton"><i class="bi bi-box-arrow-right me-2"></i>Abmelden</button></li>
@@ -119,6 +120,8 @@
       <div class="modal fade" id="tripDetailModal" tabindex="-1" aria-labelledby="tripDetailTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content border-0"><div class="modal-header"><h2 class="modal-title fs-5" id="tripDetailTitle">Ausflug</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div><div class="modal-body" id="tripDetailContent"></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Schließen</button><button type="button" class="btn btn-primary" id="tripDetailEditButton"><i class="bi bi-pencil-square me-1"></i>Bearbeiten</button></div></div></div></div>
 
       <div class="modal fade" id="boatSwitchModal" tabindex="-1" aria-labelledby="boatSwitchTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable modal-sm"><div class="modal-content border-0"><div class="modal-header"><h2 class="modal-title fs-5" id="boatSwitchTitle">Boot wechseln</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div><div class="modal-body pt-2"><p class="small text-secondary">Wähle das Boot aus, das du öffnen möchtest.</p><div id="boatSwitchList" class="list-group list-group-flush"></div></div></div></div></div>
+
+      <div class="modal fade" id="createOwnBoatModal" tabindex="-1" aria-labelledby="createOwnBoatTitle" aria-hidden="true"><div class="modal-dialog modal-sm"><form class="modal-content border-0" id="createOwnBoatForm"><div class="modal-header"><h2 class="modal-title fs-5" id="createOwnBoatTitle">Eigenes Boot anlegen</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div><div class="modal-body"><p class="small text-secondary">Du wirst für dieses Boot automatisch als Kapitän eingetragen. Deine bisherigen Bootszugehörigkeiten bleiben bestehen.</p><label class="form-label" for="ownBoatName">Bootsname</label><input id="ownBoatName" class="form-control" maxlength="80" required placeholder="z. B. Seestern"></div><div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Abbrechen</button><button class="btn btn-primary" type="submit">Boot anlegen</button></div></form></div></div>
 
       <section id="costsView" class="app-view d-none">
         <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Kosten</h2><select class="form-select form-select-sm year-select" id="costsYear"></select></div>
