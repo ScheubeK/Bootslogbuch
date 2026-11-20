@@ -51,10 +51,10 @@ export async function onRequestPost({ request, env }) {
     if (!userResponse.ok || !user?.id) return jsonResponse({ error: 'Anmeldung abgelaufen. Bitte melde dich erneut an.' }, 401);
 
     const membershipResponse = await fetch(restUrl(env.SUPABASE_URL, 'boat_memberships', {
-      select: 'role', boat_id: `eq.${boatId}`, user_id: `eq.${user.id}`, role: 'eq.owner'
+      select: 'role', boat_id: `eq.${boatId}`, user_id: `eq.${user.id}`
     }), { headers: authHeaders });
     const memberships = await membershipResponse.json();
-    if (!membershipResponse.ok || !memberships.length) return jsonResponse({ error: 'Nur der Kapitän kann die Wassertemperaturen ergänzen.' }, 403);
+    if (!membershipResponse.ok || !memberships.length) return jsonResponse({ error: 'Du bist kein Mitglied dieses Boots.' }, 403);
 
     const tripsResponse = await fetch(restUrl(env.SUPABASE_URL, 'trips', {
       select: 'id,start_at', boat_id: `eq.${boatId}`,

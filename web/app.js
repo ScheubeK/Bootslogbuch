@@ -557,7 +557,7 @@ function renderWeatherSettings() {
   element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
   element('backupDataCard').classList.toggle('d-none', !isOwner);
   const missingWaterTemperatures = state.trips.filter(trip => dateYear(trip.start_at) === '2026' && (trip.water_temperature_c === null || trip.water_temperature_c === undefined));
-  element('waterTemperatureBackfillCard').classList.toggle('d-none', !isOwner || !missingWaterTemperatures.length);
+  element('waterTemperatureBackfillCard').classList.toggle('d-none', !missingWaterTemperatures.length);
   element('resetDataCard').classList.toggle('d-none', !isOwner);
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
@@ -566,7 +566,6 @@ function renderWeatherSettings() {
 }
 
 async function backfillWaterTemperatures2026(event) {
-  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann die Wassertemperaturen ergänzen.', 'danger');
   const missing = state.trips.filter(trip => dateYear(trip.start_at) === '2026' && (trip.water_temperature_c === null || trip.water_temperature_c === undefined));
   if (!missing.length) return;
   if (!confirm(`Für ${missing.length} Ausflüge aus 2026 werden modellierte Wassertemperaturen von Alplakes ergänzt. Bestehende Werte bleiben unverändert. Fortfahren?`)) return;
