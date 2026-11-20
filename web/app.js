@@ -350,7 +350,7 @@ function syncYearSelectors() {
 }
 
 function renderAll() {
-  element('boatTitle').textContent = `Bootslogbuch: ${state.boat.name}`;
+  element('boatTitle').textContent = state.boat.name;
   element('userLabel').textContent = state.profile.display_name || state.profile.email;
   element('currentRole').textContent = state.role === 'owner' ? 'Kapitän' : 'Crew';
   renderDashboard();
