@@ -396,7 +396,7 @@ async function loadCostSharing() {
   const costIds = state.costs.map(cost => cost.id);
   let shares = [];
   if (costIds.length) {
-    const { data, error } = await state.client.from('cost_shares').select('cost_id, user_id, share_amount').in('cost_id', costIds);
+    const { data, error } = await state.client.from('cost_shares').select('cost_id, user_id, share_amount, profiles(email, display_name)').in('cost_id', costIds);
     if (error) {
       state.costSharingAvailable = false;
       state.boatMembers = members || [];
@@ -1216,6 +1216,11 @@ function addExcelSheet(workbook, name, headers, rows, widths) {
   XLSX.utils.book_append_sheet(workbook, worksheet, name);
 }
 
+function participantEmail(userId) {
+  const person = [...state.costParticipants, ...state.boatMembers, ...state.costShares].find(item => item.user_id === userId);
+  return String(person?.profiles?.email || '').trim().toLowerCase();
+}
+
 function exportExcel() {
   if (!requireOwnerForBackup()) return;
   if (!window.XLSX) return showNotice('Die Excel-Bibliothek konnte nicht geladen werden. Bitte versuche es erneut.', 'danger');
@@ -1223,9 +1228,30 @@ function exportExcel() {
   addExcelSheet(workbook, 'Ausflüge', ['Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wassertemperatur', 'Wind'], state.trips.map(trip => [
     excelDateTime(trip.start_at), excelDateTime(trip.end_at), Number(trip.engine_start), Number(trip.engine_end), Number(trip.wine_bottles), trip.remarks || '', trip.weather || '', trip.temperature_c ?? '', trip.water_temperature_c ?? '', trip.wind_kmh ?? ''
   ]), [19, 19, 13, 13, 8, 45, 24, 13, 18, 12]);
-  addExcelSheet(workbook, 'Kosten', ['Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'], state.costs.map(cost => [
-    cost.cost_date, cost.category, cost.description || '', Number(cost.amount_chf), cost.litres ?? '', cost.price_per_litre ?? ''
-  ]), [14, 18, 42, 16, 12, 14]);
+  const costHeaders = state.costSharingAvailable
+    ? ['Backup-Kosten-ID', 'Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter', 'Bezahlt von (E-Mail)']
+    : ['Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'];
+  const sharingUserIds = new Set([
+    ...state.costParticipants.map(person => person.user_id),
+    ...state.costs.map(cost => cost.paid_by).filter(Boolean),
+    ...state.costShares.map(share => share.user_id),
+    ...state.costSettlements.flatMap(settlement => [settlement.from_user_id, settlement.to_user_id])
+  ]);
+  const missingEmails = [...sharingUserIds].filter(userId => !participantEmail(userId));
+  if (state.costSharingAvailable && missingEmails.length) {
+    return showNotice('Die Sicherung kann nicht vollständig erstellt werden, weil mindestens eine historische beteiligte Person nicht mehr zugeordnet werden kann.', 'danger');
+  }
+  addExcelSheet(workbook, 'Kosten', costHeaders, state.costs.map(cost => {
+    const values = [cost.cost_date, cost.category, cost.description || '', Number(cost.amount_chf), cost.litres ?? '', cost.price_per_litre ?? ''];
+    return state.costSharingAvailable ? [cost.id, ...values, cost.paid_by ? participantEmail(cost.paid_by) : ''] : values;
+  }), state.costSharingAvailable ? [38, 14, 18, 42, 16, 12, 14, 34] : [14, 18, 42, 16, 12, 14]);
+  if (state.costSharingAvailable) {
+    addExcelSheet(workbook, 'Kostenbeteiligte', ['E-Mail', 'Name'], state.costParticipants.map(person => [participantEmail(person.user_id), person.profiles?.display_name || '']), [34, 30]);
+    addExcelSheet(workbook, 'Kostenanteile', ['Backup-Kosten-ID', 'E-Mail', 'Anteil (CHF)'], state.costShares.map(share => [share.cost_id, participantEmail(share.user_id), Number(share.share_amount)]), [38, 34, 16]);
+    addExcelSheet(workbook, 'Ausgleichszahlungen', ['Datum', 'Von (E-Mail)', 'An (E-Mail)', 'Betrag (CHF)', 'Bemerkung'], state.costSettlements.map(settlement => [
+      settlement.settlement_date, participantEmail(settlement.from_user_id), participantEmail(settlement.to_user_id), Number(settlement.amount_chf), settlement.note || ''
+    ]), [14, 34, 34, 16, 42]);
+  }
   XLSX.writeFile(workbook, `Bootslogbuch_${safeFilename(state.boat.name)}_Sicherung.xlsx`, { compression: true });
   showNotice('Excel-Sicherung heruntergeladen.');
 }
@@ -1277,6 +1303,12 @@ function importCostDate(value, label) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   throw new Error(`${label} ist kein gültiges Datum.`);
 }
+function importEmail(value, label, required = true) {
+  const email = String(value ?? '').trim().toLowerCase();
+  if (!email && !required) return '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`${label} enthält keine gültige E-Mail-Adresse.`);
+  return email;
+}
 function parseImportedTrips(rows) {
   return rows.map((row, index) => {
     const prefix = `Ausflüge, Zeile ${index + 2}`;
@@ -1313,7 +1345,42 @@ function parseImportedCosts(rows) {
     return {
       cost_date: importCostDate(importValue(row, ['datum']), `${prefix}: Datum`), category,
       description: String(importValue(row, ['beschreibung']) ?? '').trim(), amount_chf: amount,
-      litres: category === 'Treibstoff' ? litres : null, price_per_litre: category === 'Treibstoff' ? price : null
+      litres: category === 'Treibstoff' ? litres : null, price_per_litre: category === 'Treibstoff' ? price : null,
+      source_cost_id: String(importValue(row, ['backupkostenid', 'sourcecostid']) ?? '').trim(),
+      paid_by_email: importEmail(importValue(row, ['bezahltvonemail', 'paidbyemail']), `${prefix}: Bezahlt von`, false)
+    };
+  });
+}
+
+function parseImportedCostParticipants(rows) {
+  return rows.map((row, index) => ({
+    email: importEmail(importValue(row, ['email']), `Kostenbeteiligte, Zeile ${index + 2}: E-Mail`)
+  }));
+}
+
+function parseImportedCostShares(rows) {
+  return rows.map((row, index) => {
+    const prefix = `Kostenanteile, Zeile ${index + 2}`;
+    const sourceCostId = String(importValue(row, ['backupkostenid', 'sourcecostid']) ?? '').trim();
+    if (!sourceCostId) throw new Error(`${prefix}: Backup-Kosten-ID fehlt.`);
+    const amount = importNumber(importValue(row, ['anteilchf', 'anteil']), `${prefix}: Anteil`, true);
+    if (amount < 0) throw new Error(`${prefix}: Anteil darf nicht negativ sein.`);
+    return { source_cost_id: sourceCostId, user_email: importEmail(importValue(row, ['email']), `${prefix}: E-Mail`), share_amount: amount };
+  });
+}
+
+function parseImportedSettlements(rows) {
+  return rows.map((row, index) => {
+    const prefix = `Ausgleichszahlungen, Zeile ${index + 2}`;
+    const amount = importNumber(importValue(row, ['betragchf', 'betrag']), `${prefix}: Betrag`, true);
+    if (amount <= 0) throw new Error(`${prefix}: Betrag muss grösser als CHF 0 sein.`);
+    const from = importEmail(importValue(row, ['vonemail', 'von']), `${prefix}: Von`);
+    const to = importEmail(importValue(row, ['anemail', 'an']), `${prefix}: An`);
+    if (from === to) throw new Error(`${prefix}: Von und An müssen unterschiedlich sein.`);
+    return {
+      settlement_date: importCostDate(importValue(row, ['datum']), `${prefix}: Datum`),
+      from_email: from, to_email: to, amount_chf: amount,
+      note: String(importValue(row, ['bemerkung', 'beschreibung']) ?? '').trim()
     };
   });
 }
@@ -1329,18 +1396,29 @@ async function importExcel(event) {
     const sheetByName = aliases => workbook.SheetNames.find(name => aliases.includes(normaliseImportHeader(name)));
     const tripsSheet = sheetByName(['ausfluege', 'logbuch']);
     const costsSheet = sheetByName(['kosten']);
+    const participantsSheet = sheetByName(['kostenbeteiligte']);
+    const sharesSheet = sheetByName(['kostenanteile']);
+    const settlementsSheet = sheetByName(['ausgleichszahlungen']);
     if (!tripsSheet && !costsSheet) throw new Error('Die Excel-Datei benötigt mindestens den Tab „Ausflüge“ oder „Kosten“.');
     const trips = tripsSheet ? parseImportedTrips(XLSX.utils.sheet_to_json(workbook.Sheets[tripsSheet], { defval: null, raw: true })) : [];
     const costs = costsSheet ? parseImportedCosts(XLSX.utils.sheet_to_json(workbook.Sheets[costsSheet], { defval: null, raw: true })) : [];
+    const participants = participantsSheet ? parseImportedCostParticipants(XLSX.utils.sheet_to_json(workbook.Sheets[participantsSheet], { defval: null, raw: true })) : [];
+    const shares = sharesSheet ? parseImportedCostShares(XLSX.utils.sheet_to_json(workbook.Sheets[sharesSheet], { defval: null, raw: true })) : [];
+    const settlements = settlementsSheet ? parseImportedSettlements(XLSX.utils.sheet_to_json(workbook.Sheets[settlementsSheet], { defval: null, raw: true })) : [];
     if (!trips.length && !costs.length) throw new Error('Die Excel-Datei enthält keine importierbaren Zeilen.');
-    if (!confirm(`${trips.length} Ausflüge und ${costs.length} Kosten werden zu „${state.boat.name}“ hinzugefügt. Bestehende Daten bleiben erhalten. Fortfahren?`)) return;
-    const { error } = await state.client.rpc('import_boat_backup', { target_boat_id: state.boat.id, trip_rows: trips, cost_rows: costs });
+    const hasCostSharingData = Boolean(participantsSheet || sharesSheet || settlementsSheet);
+    if (hasCostSharingData && costs.some(cost => !cost.source_cost_id)) throw new Error('Für die Kostenaufteilung benötigt jeder Kostenposten eine Backup-Kosten-ID. Bitte verwende eine aktuelle Excel-Sicherung.');
+    const sharingText = hasCostSharingData ? `, ${participants.length} Kostenbeteiligte, ${shares.length} Kostenanteile und ${settlements.length} Ausgleichszahlungen` : '';
+    if (!confirm(`${trips.length} Ausflüge und ${costs.length} Kosten${sharingText} werden zu „${state.boat.name}“ hinzugefügt. Bestehende Daten bleiben erhalten. Die genannten Personen müssen bereits Crewmitglieder dieses Boots sein. Fortfahren?`)) return;
+    const { error } = hasCostSharingData
+      ? await state.client.rpc('import_boat_backup_full', { target_boat_id: state.boat.id, trip_rows: trips, cost_rows: costs, participant_rows: participants, share_rows: shares, settlement_rows: settlements })
+      : await state.client.rpc('import_boat_backup', { target_boat_id: state.boat.id, trip_rows: trips, cost_rows: costs });
     if (error) {
-      if (error.code === 'PGRST202') throw new Error('Der Datenimport ist noch nicht eingerichtet. Bitte zuerst Migration 006 im Supabase SQL Editor ausführen.');
+      if (error.code === 'PGRST202') throw new Error(hasCostSharingData ? 'Der vollständige Datenimport ist noch nicht eingerichtet. Bitte zuerst die neueste Supabase-Migration ausführen.' : 'Der Datenimport ist noch nicht eingerichtet. Bitte zuerst Migration 006 im Supabase SQL Editor ausführen.');
       throw error;
     }
     await loadBoatData();
-    showNotice(`${trips.length} Ausflüge und ${costs.length} Kosten importiert.`);
+    showNotice(`${trips.length} Ausflüge und ${costs.length} Kosten${hasCostSharingData ? ' inklusive Kostenaufteilung' : ''} importiert.`);
   } catch (error) {
     showNotice(error.message || 'Die Excel-Datei konnte nicht importiert werden.', 'danger');
   }
