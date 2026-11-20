@@ -11,6 +11,7 @@ const state = {
   activeTrip: null,
   finishingLiveTrip: false,
   weatherRequestId: 0,
+  waterTemperatureRequestId: 0,
   authMode: 'signin',
   passwordRecovery: false,
   selectedYear: String(new Date().getFullYear())
@@ -438,7 +439,8 @@ function renderTrips() {
     const conditions = [
       trip.temperature_c !== null && trip.temperature_c !== undefined ? `<span><i class="bi bi-thermometer-half text-danger me-1"></i>${trip.temperature_c}°C</span>` : '',
       trip.weather ? `<span><i class="bi bi-cloud-sun me-1"></i>${escapeHtml(trip.weather)}</span>` : '',
-      trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `<span><i class="bi bi-wind me-1"></i>${trip.wind_kmh} km/h</span>` : ''
+      trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `<span><i class="bi bi-wind me-1"></i>${trip.wind_kmh} km/h</span>` : '',
+      trip.water_temperature_c !== null && trip.water_temperature_c !== undefined ? `<span><i class="bi bi-droplet-fill text-primary me-1"></i>${trip.water_temperature_c}°C</span>` : ''
     ].filter(Boolean).join('');
     return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="showTripDetails('${trip.id}')" aria-label="Details"><i class="bi bi-chevron-right"></i></button><button class="btn btn-link btn-sm p-0 ms-2" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
@@ -625,10 +627,27 @@ async function loadCurrentWeather() {
   }
 }
 
+async function loadCurrentWaterTemperature() {
+  const requestId = ++state.waterTemperatureRequestId;
+  const status = element('waterTemperatureAutoStatus');
+  status.textContent = 'Wassertemperatur wird geladen…';
+  try {
+    const response = await fetch('/api/water-temperature', { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok || !Number.isFinite(Number(data.temperature_c))) throw new Error(data.error || 'Wassertemperatur nicht verfügbar.');
+    if (requestId !== state.waterTemperatureRequestId || element('tripId').value) return;
+    if (!element('tripWaterTemperature').value) element('tripWaterTemperature').value = data.temperature_c;
+    status.innerHTML = `Wassertemperatur automatisch übernommen · <a href="${escapeHtml(data.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(data.source)}</a> (modelliert) · ${escapeHtml(data.lake)}, ${data.depth_m} m Tiefe`;
+  } catch (_) {
+    if (requestId === state.waterTemperatureRequestId) status.textContent = 'Wassertemperatur konnte nicht automatisch geladen werden.';
+  }
+}
+
 function resetTripForm(show, withWeather = true) {
   element('tripForm').classList.toggle('d-none', !show);
   if (!show) {
     state.weatherRequestId += 1;
+    state.waterTemperatureRequestId += 1;
     element('tripForm').reset();
     element('tripId').value = '';
     element('tripEngineHint').textContent = '';
@@ -647,7 +666,11 @@ function resetTripForm(show, withWeather = true) {
   updateEngineHint();
   setWine(0);
   element('weatherAutoStatus').textContent = '';
-  if (withWeather) loadCurrentWeather();
+  element('waterTemperatureAutoStatus').textContent = '';
+  if (withWeather) {
+    loadCurrentWeather();
+    loadCurrentWaterTemperature();
+  }
   element('tripForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -661,7 +684,9 @@ async function saveTrip(event) {
     boat_id: state.boat.id, start_at: new Date(element('tripStart').value).toISOString(), end_at: new Date(element('tripEnd').value).toISOString(),
     engine_start: engineStart, engine_end: engineEnd,
     wine_bottles: Number(element('tripWine').value) || 0, remarks: element('tripRemarks').value.trim(), weather: element('tripWeather').value.trim() || null,
-    temperature_c: element('tripTemperature').value === '' ? null : numberOrZero(element('tripTemperature').value), wind_kmh: element('tripWind').value === '' ? null : numberOrZero(element('tripWind').value)
+    temperature_c: element('tripTemperature').value === '' ? null : numberOrZero(element('tripTemperature').value),
+    water_temperature_c: element('tripWaterTemperature').value === '' ? null : numberOrZero(element('tripWaterTemperature').value),
+    wind_kmh: element('tripWind').value === '' ? null : numberOrZero(element('tripWind').value)
   };
   if (!id) values.created_by = state.user.id;
   const request = id ? state.client.from('trips').update(values).eq('id', id) : state.client.from('trips').insert(values);
@@ -679,7 +704,7 @@ async function saveTrip(event) {
 window.editTrip = id => {
   const trip = state.trips.find(item => item.id === id); if (!trip) return;
   resetTripForm(true, false); element('tripId').value = trip.id;
-  element('tripStart').value = localDateTime(trip.start_at); element('tripEnd').value = localDateTime(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; setWine(trip.wine_bottles); element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
+  element('tripStart').value = localDateTime(trip.start_at); element('tripEnd').value = localDateTime(trip.end_at); element('tripEngineStart').value = trip.engine_start; element('tripEngineEnd').value = trip.engine_end; setWine(trip.wine_bottles); element('tripRemarks').value = trip.remarks || ''; element('tripWeather').value = trip.weather || ''; element('tripTemperature').value = trip.temperature_c ?? ''; element('tripWaterTemperature').value = trip.water_temperature_c ?? ''; element('tripWind').value = trip.wind_kmh ?? '';
   updateEngineHint();
 };
 
@@ -697,6 +722,7 @@ window.showTripDetails = id => {
     trip.temperature_c !== null && trip.temperature_c !== undefined ? `${trip.temperature_c} °C` : '',
     trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `${trip.wind_kmh} km/h Wind` : ''
   ].filter(Boolean).map(escapeHtml).join(' · ') || '–';
+  const waterTemperature = trip.water_temperature_c !== null && trip.water_temperature_c !== undefined ? `${trip.water_temperature_c} °C` : '–';
   element('tripDetailTitle').textContent = `Ausflug vom ${new Date(trip.start_at).toLocaleDateString('de-CH')}`;
   element('tripDetailContent').innerHTML = `<dl class="row mb-0 trip-detail-list">
     <dt class="col-5">Start</dt><dd class="col-7">${formatTripDateTime(trip.start_at)}</dd>
@@ -705,6 +731,7 @@ window.showTripDetails = id => {
     <dt class="col-5">Motor</dt><dd class="col-7">${numberOrZero(trip.engine_start).toFixed(1).replace('.', ',')} → ${numberOrZero(trip.engine_end).toFixed(1).replace('.', ',')} h <span class="text-secondary">(+${engineHours.toFixed(1).replace('.', ',')} h)</span></dd>
     <dt class="col-5">Wein</dt><dd class="col-7">${trip.wine_bottles ? `${trip.wine_bottles} ${trip.wine_bottles === 1 ? 'Flasche' : 'Flaschen'}` : '–'}</dd>
     <dt class="col-5">Wetter</dt><dd class="col-7">${weather}</dd>
+    <dt class="col-5">Wassertemperatur</dt><dd class="col-7">${waterTemperature}</dd>
     <dt class="col-12 mt-2">Bemerkungen</dt><dd class="col-12 mb-0">${trip.remarks ? escapeHtml(trip.remarks).replace(/\n/g, '<br>') : '<span class="text-secondary">Keine Bemerkungen</span>'}</dd>
   </dl>`;
   element('tripDetailEditButton').dataset.tripId = id;
@@ -799,9 +826,9 @@ function exportExcel() {
   if (!requireOwnerForBackup()) return;
   if (!window.XLSX) return showNotice('Die Excel-Bibliothek konnte nicht geladen werden. Bitte versuche es erneut.', 'danger');
   const workbook = XLSX.utils.book_new();
-  addExcelSheet(workbook, 'Ausflüge', ['Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wind'], state.trips.map(trip => [
-    excelDateTime(trip.start_at), excelDateTime(trip.end_at), Number(trip.engine_start), Number(trip.engine_end), Number(trip.wine_bottles), trip.remarks || '', trip.weather || '', trip.temperature_c ?? '', trip.wind_kmh ?? ''
-  ]), [19, 19, 13, 13, 8, 45, 24, 13, 12]);
+  addExcelSheet(workbook, 'Ausflüge', ['Start', 'Ende', 'Motor Start', 'Motor Ende', 'Wein', 'Bemerkungen', 'Wetter', 'Temperatur', 'Wassertemperatur', 'Wind'], state.trips.map(trip => [
+    excelDateTime(trip.start_at), excelDateTime(trip.end_at), Number(trip.engine_start), Number(trip.engine_end), Number(trip.wine_bottles), trip.remarks || '', trip.weather || '', trip.temperature_c ?? '', trip.water_temperature_c ?? '', trip.wind_kmh ?? ''
+  ]), [19, 19, 13, 13, 8, 45, 24, 13, 18, 12]);
   addExcelSheet(workbook, 'Kosten', ['Datum', 'Kategorie', 'Beschreibung', 'Betrag (CHF)', 'Liter', 'Preis/Liter'], state.costs.map(cost => [
     cost.cost_date, cost.category, cost.description || '', Number(cost.amount_chf), cost.litres ?? '', cost.price_per_litre ?? ''
   ]), [14, 18, 42, 16, 12, 14]);
@@ -872,6 +899,7 @@ function parseImportedTrips(rows) {
       remarks: String(importValue(row, ['bemerkungen', 'bemerkung']) ?? '').trim(),
       weather: String(importValue(row, ['wetter']) ?? '').trim() || null,
       temperature_c: importNumber(importValue(row, ['temperatur', 'temp']), `${prefix}: Temperatur`),
+      water_temperature_c: importNumber(importValue(row, ['wassertemperatur', 'wassertemp']), `${prefix}: Wassertemperatur`),
       wind_kmh: importNumber(importValue(row, ['wind', 'windkmh']), `${prefix}: Wind`)
     };
   });

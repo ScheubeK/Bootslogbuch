@@ -9,8 +9,8 @@ auf dem Branch [`apps-script`](https://github.com/ScheubeK/Bootslogbuch/tree/app
 - **Cloudflare Pages** liefert die statische Web-App aus `web/` aus.
 - **Cloudflare Pages Functions** stellt unter `/api/config` die öffentliche
   Supabase-Browserkonfiguration bereit.
-- **Supabase Auth** meldet Personen primär über Google und optional per Magic
-  Link an.
+- **Supabase Auth** meldet Personen primär über Google und optional per E-Mail
+  und Passwort an.
 - **Supabase PostgreSQL** speichert Boote, Crew, Ausflüge und Kosten.
 - **Supabase Row Level Security** erlaubt Zugriff ausschließlich auf die Boote,
   deren Crew ein Benutzer angehört.
@@ -31,6 +31,7 @@ Supabase **SQL Editor** ausgeführt:
 5. `202611170005_reset_boat_data.sql`
 6. `202611170006_import_boat_backup.sql`
 7. `202611180001_rename_benzin_to_treibstoff.sql`
+8. `202611200001_add_trip_water_temperature.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
@@ -42,6 +43,11 @@ Der Wetterort eines Boots ist standardmässig **Hergiswil NW, Schweiz**. Der
 Kapitän kann ihn in den Settings ändern; neue Ausflüge übernehmen Wetter,
 Temperatur und Wind automatisch von Open-Meteo. Es wird kein API-Schlüssel
 benötigt.
+
+Neue Ausflüge übernehmen zusätzlich eine modellierte Wassertemperatur für den
+Vierwaldstättersee (Kreuztrichter / Vitznauerbecken, 1 m Tiefe) von
+[Alplakes, Eawag](https://www.alplakes.eawag.ch/) unter CC BY 4.0. Der Wert kann
+im Ausflugsformular jederzeit überschrieben werden.
 
 ## Anmeldung konfigurieren
 
@@ -124,7 +130,7 @@ verwendet.
 
 ## Funktionsumfang der ersten Cloud-Version
 
-- Google-Anmeldung und optionale Magic-Link-Anmeldung
+- Google-Anmeldung sowie optionale Anmeldung per E-Mail und Passwort
 - mehrere Boote pro Benutzer
 - Crew-Rollen `Owner` und `Crew`
 - Ausflüge und Kosten erfassen, bearbeiten und löschen
