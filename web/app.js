@@ -8,6 +8,12 @@ const state = {
   role: null,
   trips: [],
   costs: [],
+  boatMembers: [],
+  costParticipants: [],
+  costShares: [],
+  costSettlements: [],
+  costSharingAvailable: true,
+  costsViewMode: 'entries',
   activeTrip: null,
   finishingLiveTrip: false,
   weatherRequestId: 0,
@@ -111,6 +117,11 @@ function registerEvents() {
   element('cancelCostForm').addEventListener('click', () => resetCostForm(false));
   element('costForm').addEventListener('submit', saveCost);
   element('costCategory').addEventListener('change', updateFuelFields);
+  element('costShared').addEventListener('change', updateCostSharingFields);
+  element('showCostEntries').addEventListener('click', () => showCostsView('entries'));
+  element('showCostSharing').addEventListener('click', () => showCostsView('sharing'));
+  element('costParticipantsForm').addEventListener('submit', saveCostParticipants);
+  element('settlementForm').addEventListener('submit', saveSettlement);
   element('liveTripSwitch').addEventListener('change', toggleLiveTrip);
   element('wineSwitch').addEventListener('change', event => setWineEnabled(event.target.checked));
   document.querySelectorAll('[data-wine]').forEach(button => button.addEventListener('click', () => setWine(Number(button.dataset.wine))));
@@ -355,10 +366,53 @@ async function loadBoatData() {
   if (tripsError || costsError) return showNotice((tripsError || costsError).message, 'danger');
   state.trips = trips || [];
   state.costs = costs || [];
+  await loadCostSharing();
   // Until migration 003 is installed, all existing functions remain usable.
   state.activeTrip = activeTripError ? null : activeTrip;
   populateYears();
   renderAll();
+}
+
+function isMissingCostSharingError(error) {
+  return ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error?.code);
+}
+
+async function loadCostSharing() {
+  state.costSharingAvailable = true;
+  const [{ data: members, error: membersError }, { data: participants, error: participantsError }, { data: settlements, error: settlementsError }] = await Promise.all([
+    state.client.from('boat_memberships').select('user_id, role, profiles(email, display_name)').eq('boat_id', state.boat.id).order('created_at'),
+    state.client.from('boat_cost_participants').select('user_id, profiles(email, display_name)').eq('boat_id', state.boat.id).order('created_at'),
+    state.client.from('cost_settlements').select('*').eq('boat_id', state.boat.id).order('settlement_date', { ascending: false })
+  ]);
+  if (participantsError || settlementsError) {
+    state.costSharingAvailable = false;
+    state.boatMembers = members || [];
+    state.costParticipants = [];
+    state.costShares = [];
+    state.costSettlements = [];
+    if (!isMissingCostSharingError(participantsError || settlementsError)) showNotice((participantsError || settlementsError).message, 'danger');
+    return;
+  }
+  const costIds = state.costs.map(cost => cost.id);
+  let shares = [];
+  if (costIds.length) {
+    const { data, error } = await state.client.from('cost_shares').select('cost_id, user_id, share_amount').in('cost_id', costIds);
+    if (error) {
+      state.costSharingAvailable = false;
+      state.boatMembers = members || [];
+      state.costParticipants = [];
+      state.costShares = [];
+      state.costSettlements = [];
+      if (!isMissingCostSharingError(error)) showNotice(error.message, 'danger');
+      return;
+    }
+    shares = data || [];
+  }
+  if (membersError) showNotice(membersError.message, 'danger');
+  state.boatMembers = members || [];
+  state.costParticipants = participants || [];
+  state.costShares = shares;
+  state.costSettlements = settlements || [];
 }
 
 function populateYears() {
@@ -385,6 +439,7 @@ function renderAll() {
   renderDashboardSettings();
   renderTrips();
   renderCosts();
+  renderCostSharing();
   renderLiveTrip();
   renderWeatherSettings();
   renderCrew();
@@ -851,24 +906,258 @@ function editTripFromDetail(event) {
 }
 window.deleteTrip = async id => { if (!confirm('Diesen Ausflug wirklich löschen?')) return; const { error } = await state.client.from('trips').delete().eq('id', id); if (error) return showNotice(error.message, 'danger'); await loadBoatData(); showNotice('Ausflug gelöscht.'); };
 
+function participantName(userId) {
+  const person = [...state.costParticipants, ...state.boatMembers].find(item => item.user_id === userId);
+  return person?.profiles?.display_name || person?.profiles?.email || (userId === state.user?.id ? state.profile?.display_name || state.profile?.email : 'Unbekannte Person');
+}
+
+function costSharesFor(costId) { return state.costShares.filter(share => share.cost_id === costId); }
+function isSharedCost(costId) { return costSharesFor(costId).length > 0; }
+
 function renderCosts() {
   const costs = currentCosts();
-  element('costList').innerHTML = costs.length ? costs.map(cost => `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div></div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article>`).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Kosten erfasst.</div>';
+  element('costList').innerHTML = costs.length ? costs.map(cost => {
+    const sharing = isSharedCost(cost.id) ? `<div class="small text-secondary mt-1"><i class="bi bi-people me-1"></i>Geteilt${cost.paid_by ? ` · bezahlt von ${escapeHtml(participantName(cost.paid_by))}` : ''}</div>` : '';
+    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div>${sharing}</div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article>`;
+  }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Kosten erfasst.</div>';
+  showCostsView(state.costsViewMode, false);
+}
+
+function showCostsView(mode, render = true) {
+  state.costsViewMode = mode;
+  const sharing = mode === 'sharing';
+  element('costEntriesPanel').classList.toggle('d-none', sharing);
+  element('costSharingPanel').classList.toggle('d-none', !sharing);
+  element('showCostEntries').classList.toggle('active', !sharing);
+  element('showCostSharing').classList.toggle('active', sharing);
+  if (sharing && render) renderCostSharing();
+}
+
+function renderCostShareFormOptions({ paidBy = '', participantIds = [] } = {}) {
+  const participants = state.costParticipants;
+  const fallbackPaidBy = paidBy || participants.find(person => person.user_id === state.user.id)?.user_id || participants[0]?.user_id || '';
+  element('costPaidBy').innerHTML = participants.map(person => `<option value="${person.user_id}"${person.user_id === fallbackPaidBy ? ' selected' : ''}>${escapeHtml(participantName(person.user_id))}</option>`).join('');
+  const selected = participantIds.length ? new Set(participantIds) : new Set(participants.map(person => person.user_id));
+  element('costShareParticipantOptions').innerHTML = participants.map(person => `<label class="form-check cost-share-person"><input class="form-check-input" type="checkbox" name="costShareParticipant" value="${person.user_id}"${selected.has(person.user_id) ? ' checked' : ''}><span class="form-check-label">${escapeHtml(participantName(person.user_id))}</span></label>`).join('');
+}
+
+function updateCostSharingFields() {
+  const enabled = state.costSharingAvailable && state.costParticipants.length > 0;
+  element('costSharingFields').classList.toggle('d-none', !enabled);
+  if (!enabled) {
+    element('costShared').checked = false;
+    element('costShareDetails').classList.add('d-none');
+    return;
+  }
+  element('costShareDetails').classList.toggle('d-none', !element('costShared').checked);
 }
 
 function updateFuelFields() { document.querySelectorAll('.fuel-only').forEach(field => field.classList.toggle('d-none', element('costCategory').value !== 'Treibstoff')); }
-function resetCostForm(show) { element('costForm').classList.toggle('d-none', !show); if (!show) { element('costForm').reset(); element('costId').value = ''; return; } element('costForm').reset(); element('costId').value = ''; element('costDate').value = new Date().toISOString().slice(0, 10); updateFuelFields(); element('costForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function resetCostForm(show) {
+  element('costForm').classList.toggle('d-none', !show);
+  if (!show) {
+    element('costForm').reset();
+    element('costId').value = '';
+    updateCostSharingFields();
+    return;
+  }
+  element('costForm').reset();
+  element('costId').value = '';
+  element('costDate').value = new Date().toISOString().slice(0, 10);
+  renderCostShareFormOptions();
+  element('costShared').checked = state.costSharingAvailable && state.costParticipants.length > 0;
+  updateFuelFields();
+  updateCostSharingFields();
+  element('costForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function saveCost(event) {
   event.preventDefault();
-  const id = element('costId').value, isFuel = element('costCategory').value === 'Treibstoff';
-  const values = { boat_id: state.boat.id, cost_date: element('costDate').value, category: element('costCategory').value, description: element('costDescription').value.trim(), amount_chf: numberOrZero(element('costAmount').value), litres: isFuel && element('costLitres').value !== '' ? numberOrZero(element('costLitres').value) : null, price_per_litre: isFuel && element('costPrice').value !== '' ? numberOrZero(element('costPrice').value) : null };
+  const id = element('costId').value;
+  const isFuel = element('costCategory').value === 'Treibstoff';
+  const shared = state.costSharingAvailable && state.costParticipants.length > 0 && element('costShared').checked;
+  const shareParticipants = shared ? [...document.querySelectorAll('input[name="costShareParticipant"]:checked')].map(input => input.value) : [];
+  if (shared && !shareParticipants.length) return showNotice('Wähle mindestens eine beteiligte Person aus.', 'warning');
+  const values = {
+    boat_id: state.boat.id,
+    cost_date: element('costDate').value,
+    category: element('costCategory').value,
+    description: element('costDescription').value.trim(),
+    amount_chf: numberOrZero(element('costAmount').value),
+    litres: isFuel && element('costLitres').value !== '' ? numberOrZero(element('costLitres').value) : null,
+    price_per_litre: isFuel && element('costPrice').value !== '' ? numberOrZero(element('costPrice').value) : null
+  };
+  if (state.costSharingAvailable) values.paid_by = shared ? element('costPaidBy').value : null;
   if (!id) values.created_by = state.user.id;
-  const { error } = await (id ? state.client.from('costs').update(values).eq('id', id) : state.client.from('costs').insert(values));
+  const request = id ? state.client.from('costs').update(values).eq('id', id).select().single() : state.client.from('costs').insert(values).select().single();
+  const { data: savedCost, error } = await request;
   if (error) return showNotice(error.message, 'danger');
-  resetCostForm(false); await loadBoatData(); showNotice(id ? 'Kosten aktualisiert.' : 'Kosten gespeichert.');
+  if (state.costSharingAvailable) {
+    const { error: deleteError } = await state.client.from('cost_shares').delete().eq('cost_id', savedCost.id);
+    if (deleteError) return showNotice(`Kosten gespeichert, Anteile konnten nicht aktualisiert werden: ${deleteError.message}`, 'danger');
+    if (shared) {
+      const shareAmount = values.amount_chf / shareParticipants.length;
+      const { error: sharesError } = await state.client.from('cost_shares').insert(shareParticipants.map(userId => ({ cost_id: savedCost.id, user_id: userId, share_amount: shareAmount })));
+      if (sharesError) return showNotice(`Kosten gespeichert, Anteile konnten nicht gespeichert werden: ${sharesError.message}`, 'danger');
+    }
+  }
+  resetCostForm(false);
+  await loadBoatData();
+  showNotice(id ? 'Kosten aktualisiert.' : 'Kosten gespeichert.');
 }
-window.editCost = id => { const cost = state.costs.find(item => item.id === id); if (!cost) return; resetCostForm(true); element('costId').value = cost.id; element('costDate').value = cost.cost_date; element('costCategory').value = cost.category; element('costDescription').value = cost.description || ''; element('costAmount').value = cost.amount_chf; element('costLitres').value = cost.litres ?? ''; element('costPrice').value = cost.price_per_litre ?? ''; updateFuelFields(); };
+
+window.editCost = id => {
+  const cost = state.costs.find(item => item.id === id);
+  if (!cost) return;
+  resetCostForm(true);
+  element('costId').value = cost.id;
+  element('costDate').value = cost.cost_date;
+  element('costCategory').value = cost.category;
+  element('costDescription').value = cost.description || '';
+  element('costAmount').value = cost.amount_chf;
+  element('costLitres').value = cost.litres ?? '';
+  element('costPrice').value = cost.price_per_litre ?? '';
+  const shares = costSharesFor(cost.id);
+  renderCostShareFormOptions({ paidBy: cost.paid_by || '', participantIds: shares.map(share => share.user_id) });
+  element('costShared').checked = shares.length > 0;
+  updateFuelFields();
+  updateCostSharingFields();
+};
 window.deleteCost = async id => { if (!confirm('Diesen Kostenposten wirklich löschen?')) return; const { error } = await state.client.from('costs').delete().eq('id', id); if (error) return showNotice(error.message, 'danger'); await loadBoatData(); showNotice('Kosten gelöscht.'); };
+
+function roundMoney(value) { return Math.round((Number(value) || 0) * 100) / 100; }
+
+function calculateCostBalances() {
+  const balances = new Map(state.costParticipants.map(person => [person.user_id, { userId: person.user_id, paid: 0, share: 0, sent: 0, received: 0, balance: 0 }]));
+  currentCosts().forEach(cost => {
+    const shares = costSharesFor(cost.id);
+    if (!shares.length) return;
+    if (cost.paid_by && balances.has(cost.paid_by)) balances.get(cost.paid_by).paid += numberOrZero(cost.amount_chf);
+    shares.forEach(share => {
+      if (balances.has(share.user_id)) balances.get(share.user_id).share += numberOrZero(share.share_amount);
+    });
+  });
+  state.costSettlements.filter(settlement => dateYear(settlement.settlement_date) === state.selectedYear).forEach(settlement => {
+    if (balances.has(settlement.from_user_id)) balances.get(settlement.from_user_id).sent += numberOrZero(settlement.amount_chf);
+    if (balances.has(settlement.to_user_id)) balances.get(settlement.to_user_id).received += numberOrZero(settlement.amount_chf);
+  });
+  return [...balances.values()].map(item => ({ ...item, balance: item.paid + item.sent - item.received - item.share }));
+}
+
+function suggestedSettlements(balances) {
+  const creditors = balances.filter(item => item.balance > 0.004).map(item => ({ ...item, open: roundMoney(item.balance) }));
+  const debtors = balances.filter(item => item.balance < -0.004).map(item => ({ ...item, open: roundMoney(-item.balance) }));
+  const suggestions = [];
+  let creditorIndex = 0;
+  let debtorIndex = 0;
+  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+    const creditor = creditors[creditorIndex];
+    const debtor = debtors[debtorIndex];
+    const amount = roundMoney(Math.min(creditor.open, debtor.open));
+    if (amount < 0.01) break;
+    suggestions.push({ from: debtor.userId, to: creditor.userId, amount });
+    creditor.open = roundMoney(creditor.open - amount);
+    debtor.open = roundMoney(debtor.open - amount);
+    if (creditor.open < 0.01) creditorIndex += 1;
+    if (debtor.open < 0.01) debtorIndex += 1;
+  }
+  return suggestions;
+}
+
+function renderCostSharing() {
+  const unavailable = !state.costSharingAvailable;
+  element('costSharingUnavailable').classList.toggle('d-none', !unavailable);
+  element('costSharingContent').classList.toggle('d-none', unavailable);
+  if (unavailable) return;
+  const isOwner = state.role === 'owner';
+  const selected = new Set(state.costParticipants.map(person => person.user_id));
+  element('costParticipantMembers').innerHTML = state.boatMembers.length ? state.boatMembers.map(member => `<label class="form-check cost-share-person"><input class="form-check-input" type="checkbox" name="costParticipant" value="${member.user_id}"${selected.has(member.user_id) ? ' checked' : ''}${isOwner ? '' : ' disabled'}><span class="form-check-label">${escapeHtml(participantName(member.user_id))}<small class="text-secondary d-block">${member.role === 'owner' ? 'Kapitän' : 'Crew'}</small></span></label>`).join('') : '<div class="empty-state py-2">Noch keine Bootsmitglieder vorhanden.</div>';
+  element('saveCostParticipants').classList.toggle('d-none', !isOwner);
+  element('costParticipantsHint').textContent = isOwner
+    ? 'Diese Personen werden bei neuen geteilten Kosten standardmässig berücksichtigt. Bestehende Abrechnungen bleiben unverändert.'
+    : 'Die Kostenbeteiligten werden vom Kapitän verwaltet. Bestehende Abrechnungen bleiben unverändert.';
+  element('costSharingYear').textContent = state.selectedYear;
+  const hasParticipants = state.costParticipants.length > 0;
+  const balances = calculateCostBalances();
+  element('costBalanceList').innerHTML = hasParticipants ? balances.map(item => {
+    const status = item.balance > 0.004 ? `<span class="text-success">Erhält ${formatCurrency(item.balance)}</span>` : item.balance < -0.004 ? `<span class="text-danger">Zahlt ${formatCurrency(-item.balance)}</span>` : '<span class="text-success">Ausgeglichen</span>';
+    return `<article class="cost-balance"><div><strong>${escapeHtml(participantName(item.userId))}</strong><div class="small text-secondary">Anteil ${formatCurrency(item.share)} · bezahlt ${formatCurrency(item.paid)}</div></div><strong>${status}</strong></article>`;
+  }).join('') : '<div class="empty-state py-2">Lege zuerst die Kostenbeteiligten fest.</div>';
+  const suggestions = suggestedSettlements(balances);
+  element('settlementSuggestionCard').classList.toggle('d-none', !suggestions.length);
+  element('settlementSuggestions').innerHTML = suggestions.map(suggestion => `<div class="cost-settlement-suggestion"><span><strong>${escapeHtml(participantName(suggestion.from))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(suggestion.to))}</strong><small class="d-block text-secondary">${formatCurrency(suggestion.amount)}</small></span><button class="btn btn-outline-primary btn-sm" type="button" onclick="useSettlementSuggestion('${suggestion.from}', '${suggestion.to}', ${suggestion.amount})">Übernehmen</button></div>`).join('');
+  const optionMarkup = state.costParticipants.map(person => `<option value="${person.user_id}">${escapeHtml(participantName(person.user_id))}</option>`).join('');
+  element('settlementFrom').innerHTML = optionMarkup;
+  element('settlementTo').innerHTML = optionMarkup;
+  if (!element('settlementDate').value) element('settlementDate').value = new Date().toISOString().slice(0, 10);
+  const canSettle = state.costParticipants.length >= 2;
+  element('settlementForm').classList.toggle('d-none', !canSettle);
+  const settlements = state.costSettlements.filter(settlement => dateYear(settlement.settlement_date) === state.selectedYear);
+  element('settlementList').innerHTML = settlements.length ? settlements.map(settlement => `<article class="cost-settlement"><div><strong>${escapeHtml(participantName(settlement.from_user_id))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(settlement.to_user_id))}</strong><div class="small text-secondary">${new Date(`${settlement.settlement_date}T12:00`).toLocaleDateString('de-CH')}${settlement.note ? ` · ${escapeHtml(settlement.note)}` : ''}</div></div><div class="text-end"><strong>${formatCurrency(settlement.amount_chf)}</strong><button class="btn btn-link btn-sm p-0 d-block ms-auto text-danger" type="button" onclick="deleteSettlement('${settlement.id}')">Löschen</button></div></article>`).join('') : '<div class="empty-state py-2">Noch keine Ausgleichszahlungen in diesem Jahr.</div>';
+}
+
+async function saveCostParticipants(event) {
+  event.preventDefault();
+  if (state.role !== 'owner') return showNotice('Nur der Kapitän kann Kostenbeteiligte verwalten.', 'danger');
+  const selected = new Set([...document.querySelectorAll('input[name="costParticipant"]:checked')].map(input => input.value));
+  const current = new Set(state.costParticipants.map(person => person.user_id));
+  const add = [...selected].filter(userId => !current.has(userId));
+  const remove = [...current].filter(userId => !selected.has(userId));
+  const button = element('saveCostParticipants');
+  setBusy(button, true, 'Wird gespeichert…');
+  try {
+    if (add.length) {
+      const { error } = await state.client.from('boat_cost_participants').insert(add.map(userId => ({ boat_id: state.boat.id, user_id: userId })));
+      if (error) throw error;
+    }
+    if (remove.length) {
+      const { error } = await state.client.from('boat_cost_participants').delete().eq('boat_id', state.boat.id).in('user_id', remove);
+      if (error) throw error;
+    }
+    await loadBoatData();
+    showCostsView('sharing');
+    showNotice('Kostenbeteiligte gespeichert.');
+  } catch (error) {
+    showNotice(error.message || 'Kostenbeteiligte konnten nicht gespeichert werden.', 'danger');
+  } finally {
+    setBusy(button, false, 'Kostenbeteiligte speichern');
+  }
+}
+
+window.useSettlementSuggestion = (from, to, amount) => {
+  element('settlementFrom').value = from;
+  element('settlementTo').value = to;
+  element('settlementAmount').value = Number(amount).toFixed(2);
+  element('settlementForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+async function saveSettlement(event) {
+  event.preventDefault();
+  const from = element('settlementFrom').value;
+  const to = element('settlementTo').value;
+  if (from === to) return showNotice('Von und An müssen unterschiedliche Personen sein.', 'warning');
+  const amount = numberOrZero(element('settlementAmount').value);
+  if (amount <= 0) return showNotice('Bitte einen Betrag grösser als CHF 0 eingeben.', 'warning');
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  setBusy(button, true, 'Wird gespeichert…');
+  const { error } = await state.client.from('cost_settlements').insert({ boat_id: state.boat.id, settlement_date: element('settlementDate').value, from_user_id: from, to_user_id: to, amount_chf: amount, note: element('settlementNote').value.trim(), created_by: state.user.id });
+  setBusy(button, false, 'Ausgleich speichern');
+  if (error) return showNotice(error.message, 'danger');
+  element('settlementAmount').value = '';
+  element('settlementNote').value = '';
+  await loadBoatData();
+  showCostsView('sharing');
+  showNotice('Ausgleichszahlung gespeichert.');
+}
+
+window.deleteSettlement = async id => {
+  if (!confirm('Diese Ausgleichszahlung wirklich löschen?')) return;
+  const { error } = await state.client.from('cost_settlements').delete().eq('id', id).eq('boat_id', state.boat.id);
+  if (error) return showNotice(error.message, 'danger');
+  await loadBoatData();
+  showCostsView('sharing');
+  showNotice('Ausgleichszahlung gelöscht.');
+};
 
 async function renderCrew() {
   const isOwner = state.role === 'owner';
