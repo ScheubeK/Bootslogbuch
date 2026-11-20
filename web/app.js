@@ -12,6 +12,7 @@ const state = {
   finishingLiveTrip: false,
   weatherRequestId: 0,
   waterTemperatureRequestId: 0,
+  dashboardMetricsAvailable: true,
   authMode: 'signin',
   passwordRecovery: false,
   selectedYear: String(new Date().getFullYear())
@@ -22,6 +23,21 @@ const money = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF
 const number = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
 const defaultWeatherLocation = 'Hergiswil NW, Schweiz';
 const defaultWeatherCoordinates = { lat: 46.98515, lon: 8.30956 };
+const defaultDashboardMetrics = ['trips', 'engine', 'seaTime', 'wine', 'costPerEngine', 'costPerTrip', 'costTotal'];
+const dashboardMetricOptions = [
+  { id: 'trips', label: 'Ausflüge', icon: 'bi-compass', theme: 'bg-trips' },
+  { id: 'engine', label: 'Motorstunden', icon: 'bi-gear-wide-connected', theme: 'bg-engine' },
+  { id: 'seaTime', label: 'Zeit auf See', icon: 'bi-clock-history', theme: 'bg-sea' },
+  { id: 'wine', label: 'Weinkonsum', icon: 'bi-cup-straw', theme: 'bg-wine' },
+  { id: 'costPerEngine', label: 'Kosten / Motorstunde', icon: 'bi-calculator', theme: 'bg-cost' },
+  { id: 'costPerTrip', label: 'Kosten / Ausflug', icon: 'bi-receipt', theme: 'bg-sea' },
+  { id: 'fuelLitres', label: 'Treibstoff verbraucht', icon: 'bi-fuel-pump', theme: 'bg-fuel' },
+  { id: 'fuelPerEngine', label: 'Treibstoff / Motorstunde', icon: 'bi-speedometer', theme: 'bg-fuel' },
+  { id: 'costPerSea', label: 'Kosten / Seestunde', icon: 'bi-water', theme: 'bg-cost' },
+  { id: 'averageTripDuration', label: 'Ø Ausflugsdauer', icon: 'bi-hourglass-split', theme: 'bg-average' },
+  { id: 'costTotal', label: 'Kosten Total', icon: 'bi-cash-stack', theme: 'bg-cost', wide: true }
+];
+const dashboardMetricIds = new Set(dashboardMetricOptions.map(metric => metric.id));
 const weatherDescriptions = { 0: 'Klar', 1: 'Meist klar', 2: 'Teilweise bewölkt', 3: 'Bedeckt', 45: 'Neblig', 48: 'Reifnebel', 51: 'Leichter Nieselregen', 53: 'Nieselregen', 55: 'Starker Nieselregen', 56: 'Gefrierender Nieselregen', 57: 'Starker gefrierender Nieselregen', 61: 'Leichter Regen', 63: 'Regen', 65: 'Starker Regen', 66: 'Gefrierender Regen', 67: 'Starker gefrierender Regen', 71: 'Leichter Schneefall', 73: 'Schneefall', 75: 'Starker Schneefall', 77: 'Schneekörner', 80: 'Regenschauer', 81: 'Starke Regenschauer', 82: 'Heftige Regenschauer', 85: 'Schneeschauer', 86: 'Starke Schneeschauer', 95: 'Gewitter', 96: 'Gewitter mit Hagel', 99: 'Starkes Gewitter mit Hagel' };
 
 const element = id => document.getElementById(id);
@@ -80,6 +96,8 @@ function registerEvents() {
   element('createBoatForm').addEventListener('submit', createBoat);
   element('createOwnBoatForm').addEventListener('submit', createBoat);
   element('createOwnBoatButton').addEventListener('click', showCreateOwnBoatDialog);
+  element('dashboardMetricsForm').addEventListener('submit', saveDashboardMetrics);
+  element('dashboardMetricsReset').addEventListener('click', restoreDashboardMetrics);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
   element('boatSwitchList').addEventListener('click', event => {
@@ -239,10 +257,20 @@ async function signInWithGoogle(event) {
 }
 
 async function loadProfileAndBoats() {
-  const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
-    state.client.from('profiles').select('id, email, display_name').eq('id', state.user.id).maybeSingle(),
+  const [{ data: selectedProfile, error: selectedProfileError }, { data: memberships, error: membershipError }] = await Promise.all([
+    state.client.from('profiles').select('id, email, display_name, dashboard_metrics').eq('id', state.user.id).maybeSingle(),
     state.client.from('boat_memberships').select('boat_id, role, boats(id, name)').eq('user_id', state.user.id)
   ]);
+  let profile = selectedProfile;
+  let profileError = selectedProfileError;
+  state.dashboardMetricsAvailable = true;
+  // Die App bleibt auch während eines Deployments vor der zugehörigen Migration nutzbar.
+  if (['42703', 'PGRST204'].includes(profileError?.code)) {
+    const fallback = await state.client.from('profiles').select('id, email, display_name').eq('id', state.user.id).maybeSingle();
+    profile = fallback.data;
+    profileError = fallback.error;
+    state.dashboardMetricsAvailable = false;
+  }
   if (profileError || membershipError) return showNotice((profileError || membershipError).message, 'danger');
   if (!profile) {
     // Ein in Supabase gelöschtes Konto kann lokal noch eine alte Sitzung haben.
@@ -354,6 +382,7 @@ function renderAll() {
   element('userLabel').textContent = state.profile.display_name || state.profile.email;
   element('currentRole').textContent = state.role === 'owner' ? 'Kapitän' : 'Crew';
   renderDashboard();
+  renderDashboardSettings();
   renderTrips();
   renderCosts();
   renderLiveTrip();
@@ -364,6 +393,12 @@ function renderAll() {
 function currentTrips() { return state.trips.filter(trip => dateYear(trip.start_at) === state.selectedYear); }
 function currentCosts() { return state.costs.filter(cost => dateYear(cost.cost_date) === state.selectedYear); }
 function seaHours(trips) { return trips.reduce((sum, trip) => sum + Math.max(0, new Date(trip.end_at) - new Date(trip.start_at)), 0) / 3600000; }
+function formatHours(value) { return `${value.toFixed(1).replace('.', ',')} h`; }
+function selectedDashboardMetrics(value = state.profile?.dashboard_metrics) {
+  if (!Array.isArray(value)) return [...defaultDashboardMetrics];
+  const selected = [...new Set(value.filter(id => dashboardMetricIds.has(id)))];
+  return selected.length ? dashboardMetricOptions.map(metric => metric.id).filter(id => selected.includes(id)) : [...defaultDashboardMetrics];
+}
 function dashboardComparison(current, previous, formatValue) {
   if (!previous) return 'Vorjahr: –';
   const difference = current - previous;
@@ -385,18 +420,80 @@ function renderDashboard() {
   const previousCosts = state.costs.filter(cost => dateYear(cost.cost_date) === previousYear).reduce((sum, cost) => sum + numberOrZero(cost.amount_chf), 0);
   const previousTrips = state.trips.filter(trip => dateYear(trip.start_at) === previousYear);
   const previousSeaTime = seaHours(previousTrips);
-  element('metricTrips').textContent = trips.length;
-  element('metricEngine').textContent = engineHours.toFixed(1).replace('.', ',');
-  element('metricSeaTime').textContent = `${seaTime.toFixed(1).replace('.', ',')} h`;
-  element('metricWine').textContent = `${wine} Fl.`;
-  element('metricCost').textContent = formatCurrency(totalCosts);
-  element('metricCostPerEngine').textContent = engineHours > 0 ? `${formatCurrency(totalCosts / engineHours)}/h` : '–';
-  element('metricCostPerTrip').textContent = trips.length ? formatCurrency(totalCosts / trips.length) : '–';
-  element('metricTripsComparison').textContent = dashboardComparison(trips.length, previousTrips.length, value => String(value));
-  element('metricSeaTimeComparison').textContent = dashboardComparison(seaTime, previousSeaTime, value => `${value.toFixed(1).replace('.', ',')} h`);
-  element('metricCostComparison').textContent = dashboardComparison(totalCosts, previousCosts, formatCurrency);
+  const fuelCosts = costs.filter(cost => cost.category === 'Treibstoff');
+  const fuelEntries = fuelCosts.filter(cost => cost.litres !== null && cost.litres !== undefined && cost.litres !== '');
+  const fuelLitres = fuelEntries.reduce((sum, cost) => sum + numberOrZero(cost.litres), 0);
+  const metrics = {
+    trips: { value: String(trips.length), comparison: dashboardComparison(trips.length, previousTrips.length, value => String(value)) },
+    engine: { value: engineHours.toFixed(1).replace('.', ',') },
+    seaTime: { value: formatHours(seaTime), comparison: dashboardComparison(seaTime, previousSeaTime, formatHours) },
+    wine: { value: `${wine} Fl.` },
+    costPerEngine: { value: engineHours > 0 ? `${formatCurrency(totalCosts / engineHours)}/h` : '–' },
+    costPerTrip: { value: trips.length ? formatCurrency(totalCosts / trips.length) : '–' },
+    costTotal: { value: formatCurrency(totalCosts), comparison: dashboardComparison(totalCosts, previousCosts, formatCurrency) },
+    fuelLitres: { value: fuelEntries.length ? `${fuelLitres.toFixed(1).replace('.', ',')} l` : '–' },
+    fuelPerEngine: { value: fuelEntries.length && engineHours > 0 ? `${(fuelLitres / engineHours).toFixed(1).replace('.', ',')} l/h` : '–' },
+    costPerSea: { value: seaTime > 0 ? `${formatCurrency(totalCosts / seaTime)}/h` : '–' },
+    averageTripDuration: { value: trips.length ? formatHours(seaTime / trips.length) : '–' }
+  };
+  const selected = selectedDashboardMetrics();
+  const regularMetrics = selected.filter(id => !dashboardMetricOptions.find(metric => metric.id === id)?.wide);
+  const lastRegularMetric = regularMetrics[regularMetrics.length - 1];
+  element('dashboardMetrics').innerHTML = selected.map(id => {
+    const definition = dashboardMetricOptions.find(metric => metric.id === id);
+    const isWide = definition.wide || (id === lastRegularMetric && regularMetrics.length % 2 === 1);
+    const metric = metrics[id];
+    return `<div class="${isWide ? 'col-12' : 'col-6'}"><div class="metric-card ${definition.theme}"><i class="bi ${definition.icon}"></i><span>${definition.label}</span><strong>${metric.value}</strong>${metric.comparison ? `<span>${metric.comparison}</span>` : ''}</div></div>`;
+  }).join('');
   element('costBreakdown').innerHTML = categories.map(category => `<div class="col-6"><div class="small text-secondary">${category}</div><strong>${formatCurrency(totals[category])}</strong></div>`).join('');
   renderTrend();
+}
+
+function renderDashboardSettings() {
+  const selected = selectedDashboardMetrics();
+  const disabled = state.dashboardMetricsAvailable ? '' : ' disabled';
+  element('dashboardMetricOptions').innerHTML = dashboardMetricOptions.map(metric => `<label class="form-check form-switch dashboard-option"><input class="form-check-input" type="checkbox" name="dashboardMetric" value="${metric.id}"${selected.includes(metric.id) ? ' checked' : ''}${disabled}><span class="form-check-label">${metric.label}</span></label>`).join('');
+  element('dashboardMetricsSave').disabled = !state.dashboardMetricsAvailable;
+  element('dashboardMetricsReset').disabled = !state.dashboardMetricsAvailable;
+  element('dashboardMetricsHint').textContent = state.dashboardMetricsAvailable
+    ? 'Wähle die Kennzahlen, die du auf deinem Dashboard sehen möchtest. Die Auswahl gilt nur für dich – unabhängig vom verwendeten Gerät.'
+    : 'Dashboard-Auswahl wird nach der Supabase-Migration verfügbar.';
+}
+
+async function persistDashboardMetrics(metricIds, button, successMessage) {
+  if (!state.dashboardMetricsAvailable) return showNotice('Bitte zuerst die Dashboard-Migration in Supabase ausführen.', 'warning');
+  if (!metricIds.length) return showNotice('Wähle mindestens eine Dashboard-Kachel aus.', 'warning');
+  const originalLabel = button.textContent;
+  setBusy(button, true, 'Wird gespeichert…');
+  try {
+    const { data, error } = await state.client.from('profiles').update({ dashboard_metrics: metricIds }).eq('id', state.user.id).select('dashboard_metrics').single();
+    if (error) {
+      if (['42703', 'PGRST204'].includes(error.code)) {
+        state.dashboardMetricsAvailable = false;
+        renderDashboardSettings();
+        throw new Error('Bitte zuerst die Dashboard-Migration in Supabase ausführen.');
+      }
+      throw error;
+    }
+    state.profile.dashboard_metrics = data?.dashboard_metrics || metricIds;
+    renderDashboard();
+    renderDashboardSettings();
+    showNotice(successMessage);
+  } catch (error) {
+    showNotice(error.message || 'Dashboard-Auswahl konnte nicht gespeichert werden.', 'danger');
+  } finally {
+    setBusy(button, false, originalLabel);
+  }
+}
+
+function saveDashboardMetrics(event) {
+  event.preventDefault();
+  const selected = [...document.querySelectorAll('input[name="dashboardMetric"]:checked')].map(input => input.value);
+  return persistDashboardMetrics(selected, event.currentTarget.querySelector('button[type="submit"]'), 'Dashboard-Auswahl gespeichert.');
+}
+
+function restoreDashboardMetrics(event) {
+  return persistDashboardMetrics([...defaultDashboardMetrics], event.currentTarget, 'Standardauswahl wiederhergestellt.');
 }
 
 function renderTrend() {
@@ -960,7 +1057,7 @@ async function importExcel(event) {
   }
 }
 
-function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') renderCrew(); }
+function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') { renderDashboardSettings(); renderCrew(); } }
 function switchBoat() {
   if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.');
   element('boatSwitchList').innerHTML = state.boats.map(boat => {
