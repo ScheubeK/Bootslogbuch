@@ -100,7 +100,6 @@ function registerEvents() {
   element('weatherSettingsForm').addEventListener('submit', saveWeatherLocation);
   element('exportExcelButton').addEventListener('click', exportExcel);
   element('importExcelInput').addEventListener('change', importExcel);
-  element('backfillWaterTemperaturesButton').addEventListener('click', backfillWaterTemperatures2026);
   element('resetDataButton').addEventListener('click', resetBoatData);
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
@@ -556,38 +555,11 @@ function renderWeatherSettings() {
   const isOwner = state.role === 'owner';
   element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
   element('backupDataCard').classList.toggle('d-none', !isOwner);
-  const missingWaterTemperatures = state.trips.filter(trip => dateYear(trip.start_at) === '2026' && (trip.water_temperature_c === null || trip.water_temperature_c === undefined));
-  element('waterTemperatureBackfillCard').classList.toggle('d-none', !missingWaterTemperatures.length);
   element('resetDataCard').classList.toggle('d-none', !isOwner);
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
     ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
     : 'Der Wetterort wird vom Kapitän verwaltet.';
-}
-
-async function backfillWaterTemperatures2026(event) {
-  const missing = state.trips.filter(trip => dateYear(trip.start_at) === '2026' && (trip.water_temperature_c === null || trip.water_temperature_c === undefined));
-  if (!missing.length) return;
-  if (!confirm(`Für ${missing.length} Ausflüge aus 2026 werden modellierte Wassertemperaturen von Alplakes ergänzt. Bestehende Werte bleiben unverändert. Fortfahren?`)) return;
-  const button = event.currentTarget;
-  setBusy(button, true, 'Wird ergänzt…');
-  try {
-    const { data: { session } } = await state.client.auth.getSession();
-    if (!session?.access_token) throw new Error('Deine Anmeldung ist abgelaufen. Bitte melde dich erneut an.');
-    const response = await fetch('/api/backfill-water-temperatures', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ boatId: state.boat.id, year: 2026 })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Wassertemperaturen konnten nicht ergänzt werden.');
-    await loadBoatData();
-    showNotice(result.skipped ? `${result.updated} Wassertemperaturen ergänzt. ${result.skipped} Ausflüge konnten nicht ergänzt werden.` : `${result.updated} Wassertemperaturen für 2026 ergänzt.`);
-  } catch (error) {
-    showNotice(error.message || 'Wassertemperaturen konnten nicht ergänzt werden.', 'danger');
-  } finally {
-    setBusy(button, false, 'Wassertemperaturen 2026 ergänzen');
-  }
 }
 
 async function resetBoatData(event) {
