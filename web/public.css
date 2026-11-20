@@ -3,8 +3,10 @@ body { background: linear-gradient(160deg, #eff7ff 0, #f7f9fc 46%, #eef7f3 100%)
 .public-shell { max-width: 780px; }
 .public-nav { min-height: 72px; }
 .public-brand { color: #173f67; font-weight: 700; text-decoration: none; }
-.public-logo { width: 42px; height: 42px; object-fit: cover; border: 2px solid #0d6efd; border-radius: 50%; background: #fff; box-shadow: 0 .2rem .6rem rgba(13, 110, 253, .2); }
+.public-logo { width: 78px; height: 44px; object-fit: contain; }
 .public-hero { padding: 3.5rem 1.5rem; border-radius: 1.5rem; background: linear-gradient(135deg, #0d6efd, #176b93); color: #fff; box-shadow: 0 .8rem 2rem rgba(17, 82, 150, .18); }
+.public-video-frame { max-width: 360px; border-radius: 1rem; overflow: hidden; background: rgba(255, 255, 255, .94); box-shadow: 0 .35rem 1rem rgba(0, 0, 0, .16); }
+.public-video { display: block; width: 100%; height: auto; }
 .public-card { border: 0; border-radius: 1rem; box-shadow: 0 .2rem .9rem rgba(27, 50, 70, .08); }
 .public-footer { color: #627181; font-size: .875rem; }
 .public-footer a { color: inherit; }

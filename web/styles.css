@@ -2,10 +2,10 @@
 body { background: #f1f4f8; min-height: 100vh; }
 .app-shell { max-width: 760px; }
 .auth-card { max-width: 470px; margin: 9vh auto; }
-.brand-logo { object-fit: cover; border-radius: 50%; border: 2px solid #0d6efd; box-shadow: 0 .25rem .65rem rgba(13, 110, 253, .22); background: #fff; }
-.brand-logo-auth { width: 58px; height: 58px; }
-.brand-logo-small { width: 46px; height: 46px; box-shadow: none; }
-.app-header { display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; align-items: center; column-gap: .5rem; min-height: 46px; }.app-header-title { min-width: 0; text-align: center; line-height: 1.15; }.app-header .dropdown { justify-self: end; }
+.brand-logo { display: block; object-fit: contain; }
+.brand-logo-auth { width: 190px; height: 74px; margin-inline: auto; }
+.brand-logo-small { width: 72px; height: 42px; }
+.app-header { display: grid; grid-template-columns: 72px minmax(0, 1fr) 72px; align-items: center; column-gap: .5rem; min-height: 42px; }.app-header-title { min-width: 0; text-align: center; line-height: 1.15; }.app-header .dropdown { justify-self: end; }
 .app-nav { gap: .2rem; padding: .25rem; background: #fff; border-radius: 1rem; box-shadow: 0 .15rem .6rem rgba(0, 0, 0, .08); }
 .app-nav .nav-link { display: grid; gap: .1rem; padding: .45rem .2rem; border-radius: .8rem; font-size: .72rem; color: #53606d; }
 .app-nav .nav-link i { font-size: 1rem; }
