@@ -15,13 +15,13 @@
     <nav class="public-nav d-flex align-items-center justify-content-between gap-3"><a class="public-brand d-flex align-items-center gap-2" href="./info.html"><img class="public-logo" src="./assets/bootslogbuch-logo-transparent.png" alt="Bootslogbuch Logo"><span>Bootslogbuch</span></a><a class="btn btn-outline-primary" href="./">App öffnen</a></nav>
     <article class="public-card card"><div class="card-body p-4 p-md-5 legal-copy">
       <h1 class="h2">Datenschutzerklärung</h1>
-      <p class="text-secondary">Stand: 18. November 2026</p>
+      <p class="text-secondary">Stand: 20. November 2026</p>
       <h2>1. Verantwortliche Stelle</h2>
       <p>Verantwortlich für Bootslogbuch ist Karl Scheuber. Bei Fragen zum Datenschutz erreichst du uns unter <a href="mailto:k.scheuber@gmail.com">k.scheuber@gmail.com</a>.</p>
       <h2>2. Zweck der Verarbeitung</h2>
       <p>Bootslogbuch dient der gemeinsamen Führung eines digitalen Bootslogbuchs. Die Daten werden ausschliesslich bereitgestellt, um Benutzerkonten, Boote, Crew-Zugehörigkeiten, Ausflüge, Kosten, Auswertungen sowie Sicherungen und Wiederherstellungen zu ermöglichen.</p>
       <h2>3. Verarbeitete Daten</h2>
-      <p>Je nach Nutzung verarbeiten wir E-Mail-Adresse, Anzeigename und Angaben aus dem Anmeldeverfahren. Für ein Boot können Ausflugsdaten (Zeitpunkte, Motorstunden, Wetter, Bemerkungen und Weinangaben) sowie Kostendaten (Datum, Kategorie, Beschreibung, Betrag und optionale Treibstoffdaten) gespeichert werden.</p>
+      <p>Je nach Nutzung verarbeiten wir E-Mail-Adresse, Anzeigename und Angaben aus dem Anmeldeverfahren. Für ein Boot können Ausflugsdaten (Zeitpunkte, Motorstunden, Wetter, Luft- und Wassertemperatur, Bemerkungen und Weinangaben) sowie Kostendaten (Datum, Kategorie, Beschreibung, Betrag und optionale Treibstoffdaten) gespeichert werden.</p>
       <p>Bei Google-Anmeldung verarbeitet Google die Anmeldedaten gemäss den eigenen Datenschutzbestimmungen. Bootslogbuch erhält die für die Anmeldung erforderlichen Profilangaben, insbesondere E-Mail-Adresse und Anzeigename.</p>
       <h2>4. Zugriff innerhalb eines Boots</h2>
       <p>Die vom Kapitän eingeladenen Crewmitglieder können die Daten des jeweiligen Boots sehen und gemäss ihrer Rolle bearbeiten. Andere Benutzer haben keinen Zugriff auf diese Bootsdaten.</p>
@@ -31,6 +31,7 @@
         <li><strong>Supabase:</strong> Benutzeranmeldung und Speicherung der App-Daten.</li>
         <li><strong>Google:</strong> optionale Anmeldung über Google OAuth.</li>
         <li><strong>Open-Meteo:</strong> Abruf von Wetterdaten. Hierzu wird der konfigurierte Wetterort bzw. dessen Koordinaten angefragt.</li>
+        <li><strong>Alplakes / Eawag:</strong> Abruf eines modellierten Wassertemperaturwerts für den Vierwaldstättersee (Kreuztrichter / Vitznauerbecken, 1 m Tiefe). Die Anfrage erfolgt über unsere Cloudflare-Funktion; es werden dabei keine Konto-, Boots- oder persönlichen Standortdaten übermittelt.</li>
       </ul>
       <p>Für die Darstellung werden zudem technische Inhalte von Drittanbietern geladen, etwa Bootstrap, Bootstrap Icons, SheetJS und die Animation beim laufenden Ausflug. Dabei können technisch bedingt IP-Adresse und Browserdaten an diese Anbieter übermittelt werden.</p>
       <h2>6. Speicherung und Löschung</h2>
