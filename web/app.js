@@ -250,9 +250,9 @@ async function submitEmailAuth(event) {
   }
   if (mode === 'signup') {
     setAuthMode('signin');
-    return showNotice(`Konto angelegt. Prüfe ${email}, um die E-Mail-Adresse zu bestätigen.`, 'success');
+    return showNotice(`Konto angelegt. Prüfe ${email}, um die E-Mail-Adresse zu bestätigen.`, 'success', { force: true });
   }
-  if (mode === 'reset') return showNotice(`Ein Link zum Setzen deines Passworts wurde an ${email} gesendet.`, 'success');
+  if (mode === 'reset') return showNotice(`Ein Link zum Setzen deines Passworts wurde an ${email} gesendet.`, 'success', { force: true });
   if (mode === 'recovery') {
     state.passwordRecovery = false;
     window.history.replaceState({}, '', window.location.pathname + window.location.search);
@@ -590,12 +590,12 @@ async function shareSeasonReview() {
       return;
     }
     await navigator.clipboard.writeText(text);
-    showNotice('Saisonrückblick in die Zwischenablage kopiert.');
+    showNotice('Saisonrückblick in die Zwischenablage kopiert.', 'success', { force: true });
   } catch (error) {
     if (error?.name === 'AbortError') return;
     try {
       await navigator.clipboard.writeText(text);
-      showNotice('Saisonrückblick in die Zwischenablage kopiert.');
+      showNotice('Saisonrückblick in die Zwischenablage kopiert.', 'success', { force: true });
     } catch (_) {
       window.prompt('Saisonrückblick kopieren:', text);
     }
@@ -1378,7 +1378,7 @@ async function createInvitation(event) {
   if (error) return showNotice(error.message, 'danger');
   element('inviteEmail').value = ''; await renderCrew(); showNotice('Einladung erstellt. Kopiere nun den Einladungslink.');
 }
-window.copyInvitation = async token => { const link = `${window.location.origin}${window.location.pathname}?invite=${token}`; try { await navigator.clipboard.writeText(link); showNotice('Einladungslink kopiert.'); } catch (_) { window.prompt('Einladungslink kopieren:', link); } };
+window.copyInvitation = async token => { const link = `${window.location.origin}${window.location.pathname}?invite=${token}`; try { await navigator.clipboard.writeText(link); showNotice('Einladungslink kopiert.', 'success', { force: true }); } catch (_) { window.prompt('Einladungslink kopieren:', link); } };
 window.revokeInvitation = async id => {
   if (state.role !== 'owner') return showNotice('Nur der Kapitän kann Einladungen zurückziehen.', 'danger');
   if (!confirm('Diese Einladung wirklich zurückziehen? Der bisherige Einladungslink wird sofort ungültig.')) return;
@@ -1450,7 +1450,7 @@ function exportExcel() {
     ]), [14, 34, 34, 16, 42]);
   }
   XLSX.writeFile(workbook, `Bootslogbuch_${safeFilename(state.boat.name)}_Sicherung.xlsx`, { compression: true });
-  showNotice('Excel-Sicherung heruntergeladen.');
+  showNotice('Excel-Sicherung heruntergeladen.', 'success', { force: true });
 }
 
 function normaliseImportHeader(value) {
@@ -1651,5 +1651,13 @@ async function selectBoat(boatId) {
 }
 async function signOut() { await state.client.auth.signOut(); showNotice('Abgemeldet.'); }
 function showScreen(id) { ['loadingScreen', 'loginScreen', 'setupScreen', 'appScreen'].forEach(screenId => element(screenId).classList.toggle('d-none', screenId !== id)); }
-function showNotice(message, variant = 'success') { const notice = element('notice'); notice.className = `alert alert-${variant}`; notice.textContent = message; notice.classList.remove('d-none'); window.clearTimeout(showNotice.timeout); showNotice.timeout = window.setTimeout(() => notice.classList.add('d-none'), 5000); }
+function showNotice(message, variant = 'success', { force = false } = {}) {
+  if (variant === 'success' && !force) return;
+  const notice = element('notice');
+  notice.className = `alert alert-${variant}`;
+  notice.textContent = message;
+  notice.classList.remove('d-none');
+  window.clearTimeout(showNotice.timeout);
+  showNotice.timeout = window.setTimeout(() => notice.classList.add('d-none'), variant === 'danger' ? 7000 : 5000);
+}
 function setBusy(button, busy, label) { button.disabled = busy; button.textContent = label; }

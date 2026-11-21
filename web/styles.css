@@ -1,5 +1,6 @@
 :root { color-scheme: light; }
 body { background: #f1f4f8; min-height: 100vh; }
+#notice { position: fixed; z-index: 1080; top: max(.75rem, env(safe-area-inset-top)); left: 50%; width: min(calc(100vw - 2rem), 620px); margin: 0; transform: translateX(-50%); box-shadow: 0 .35rem 1rem rgba(0, 0, 0, .16); }
 .app-shell { max-width: 760px; }
 .auth-card { max-width: 470px; margin: 9vh auto; }
 .brand-logo { display: block; object-fit: contain; }
