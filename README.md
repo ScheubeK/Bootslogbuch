@@ -32,6 +32,11 @@ Supabase **SQL Editor** ausgeführt:
 6. `202611170006_import_boat_backup.sql`
 7. `202611180001_rename_benzin_to_treibstoff.sql`
 8. `202611200001_add_trip_water_temperature.sql`
+9. `202611200002_add_dashboard_preferences.sql`
+10. `202611200003_add_cost_sharing.sql`
+11. `202611200004_import_full_cost_backup.sql`
+12. `202611210001_delete_boat_year_data.sql`
+13. `202611210002_add_boat_water_lake.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige
@@ -44,10 +49,11 @@ Kapitän kann ihn in den Settings ändern; neue Ausflüge übernehmen Wetter,
 Temperatur und Wind automatisch von Open-Meteo. Es wird kein API-Schlüssel
 benötigt.
 
-Neue Ausflüge übernehmen zusätzlich eine modellierte Wassertemperatur für den
-Vierwaldstättersee (Kreuztrichter / Vitznauerbecken, 1 m Tiefe) von
-[Alplakes, Eawag](https://www.alplakes.eawag.ch/) unter CC BY 4.0. Der Wert kann
-im Ausflugsformular jederzeit überschrieben werden.
+Neue Ausflüge übernehmen zusätzlich eine modellierte Wassertemperatur (1 m
+Tiefe) von [Alplakes, Eawag](https://www.alplakes.eawag.ch/) unter CC BY 4.0.
+Der Kapitän wählt den See in den Settings pro Boot; Wetterort und See sind
+unabhängig voneinander. Der Wert kann im Ausflugsformular jederzeit
+überschrieben werden.
 
 ## Anmeldung konfigurieren
 

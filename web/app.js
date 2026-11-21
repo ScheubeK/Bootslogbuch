@@ -31,6 +31,23 @@ const money = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF
 const number = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
 const defaultWeatherLocation = 'Hergiswil NW, Schweiz';
 const defaultWeatherCoordinates = { lat: 46.98515, lon: 8.30956 };
+const defaultWaterLake = 'lucernekreuztrichterandvitznauerbecken';
+const waterLakeOptions = [
+  { id: 'lucernekreuztrichterandvitznauerbecken', label: 'Vierwaldstättersee – Kreuztrichter / Vitznauerbecken' },
+  { id: 'zug', label: 'Zugersee' },
+  { id: 'walensee', label: 'Walensee' },
+  { id: 'upperzurich', label: 'Zürichsee – Obersee' },
+  { id: 'lowerzurich', label: 'Zürichsee – Untersee' },
+  { id: 'thun', label: 'Thunersee' },
+  { id: 'brienz', label: 'Brienzersee' },
+  { id: 'upperconstance', label: 'Bodensee – Obersee' },
+  { id: 'lowerconstance', label: 'Bodensee – Untersee' },
+  { id: 'geneva', label: 'Genfersee' },
+  { id: 'maggiore', label: 'Lago Maggiore' },
+  { id: 'upperlugano', label: 'Luganersee – Nordbecken' },
+  { id: 'lowerlugano', label: 'Luganersee – Südbecken' }
+];
+const waterLakeIds = new Set(waterLakeOptions.map(lake => lake.id));
 const defaultDashboardMetrics = ['trips', 'engine', 'seaTime', 'wine', 'costPerEngine', 'costPerTrip', 'costTotal'];
 const dashboardMetricOptions = [
   { id: 'trips', label: 'Ausflüge', icon: 'bi-compass', theme: 'bg-trips' },
@@ -66,7 +83,8 @@ const boatFromMembership = membership => ({
   name: Array.isArray(membership.boats) ? membership.boats[0]?.name : membership.boats?.name,
   weatherLocation: defaultWeatherLocation,
   weatherLat: defaultWeatherCoordinates.lat,
-  weatherLon: defaultWeatherCoordinates.lon
+  weatherLon: defaultWeatherCoordinates.lon,
+  waterLake: defaultWaterLake
 });
 
 document.addEventListener('DOMContentLoaded', initialize);
@@ -338,8 +356,11 @@ async function acceptInvitationFromUrl() {
 
 async function loadWeatherSettings() {
   if (!state.boats.length) return;
-  const { data, error } = await state.client.from('boats').select('id, weather_location, weather_lat, weather_lon').in('id', state.boats.map(boat => boat.id));
-  // Migration 004 may not yet have been executed; the default remains usable.
+  let { data, error } = await state.client.from('boats').select('id, weather_location, weather_lat, weather_lon, water_lake').in('id', state.boats.map(boat => boat.id));
+  // Die Einstellung bleibt auch bei einem noch nicht migrierten Projekt nutzbar.
+  if (['42703', 'PGRST204'].includes(error?.code)) {
+    ({ data, error } = await state.client.from('boats').select('id, weather_location, weather_lat, weather_lon').in('id', state.boats.map(boat => boat.id)));
+  }
   if (error) return;
   const settings = new Map((data || []).map(boat => [boat.id, boat]));
   state.boats.forEach(boat => {
@@ -348,6 +369,7 @@ async function loadWeatherSettings() {
     boat.weatherLocation = value.weather_location || defaultWeatherLocation;
     boat.weatherLat = Number(value.weather_lat) || defaultWeatherCoordinates.lat;
     boat.weatherLon = Number(value.weather_lon) || defaultWeatherCoordinates.lon;
+    boat.waterLake = waterLakeIds.has(value.water_lake) ? value.water_lake : defaultWaterLake;
   });
 }
 
@@ -907,9 +929,10 @@ function renderWeatherSettings() {
   const defaultResetYear = resetYears[resetYears.length - 1];
   element('resetDataYear').innerHTML = [...resetYears.map(year => `<option value="${year}"${year === defaultResetYear ? ' selected' : ''}>Nur Jahr ${year}</option>`), '<option value="all">Alle Jahre</option>'].join('');
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
+  element('waterLake').value = waterLakeIds.has(state.boat.waterLake) ? state.boat.waterLake : defaultWaterLake;
   element('weatherSettingsHint').textContent = isOwner
-    ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
-    : 'Der Wetterort wird vom Kapitän verwaltet.';
+    ? 'Für neue Ausflüge werden Wetterdaten und die Wassertemperatur automatisch übernommen.'
+    : 'Wetterort und See werden vom Kapitän verwaltet.';
 }
 
 async function resetBoatData(event) {
@@ -936,7 +959,9 @@ async function saveWeatherLocation(event) {
   if (state.role !== 'owner') return showNotice('Nur der Kapitän kann den Wetterort ändern.', 'danger');
   const button = event.currentTarget.querySelector('button');
   const query = element('weatherLocation').value.trim();
+  const waterLake = element('waterLake').value;
   if (!query) return;
+  if (!waterLakeIds.has(waterLake)) return showNotice('Bitte wähle einen gültigen See aus.', 'danger');
   setBusy(button, true, 'Ort wird gesucht…');
   try {
     const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=de&format=json`);
@@ -944,17 +969,17 @@ async function saveWeatherLocation(event) {
     const result = (await response.json()).results?.[0];
     if (!result) throw new Error('Kein passender Wetterort gefunden.');
     const location = [result.name, result.admin1, result.country].filter((value, index, values) => value && values.indexOf(value) === index).join(', ');
-    const values = { weather_location: location, weather_lat: result.latitude, weather_lon: result.longitude };
+    const values = { weather_location: location, weather_lat: result.latitude, weather_lon: result.longitude, water_lake: waterLake };
     const { error } = await state.client.from('boats').update(values).eq('id', state.boat.id);
     if (error) {
-      if (error.code === '42703') throw new Error('Wetterort ist noch nicht eingerichtet. Bitte zuerst Migration 004 ausführen.');
+      if (error.code === '42703' || error.code === 'PGRST204') throw new Error('Wetterort und See sind noch nicht vollständig eingerichtet. Bitte zuerst die neue Supabase-Migration ausführen.');
       throw error;
     }
-    Object.assign(state.boat, { weatherLocation: location, weatherLat: result.latitude, weatherLon: result.longitude });
+    Object.assign(state.boat, { weatherLocation: location, weatherLat: result.latitude, weatherLon: result.longitude, waterLake });
     const savedBoat = state.boats.find(boat => boat.id === state.boat.id);
     if (savedBoat) Object.assign(savedBoat, state.boat);
     renderWeatherSettings();
-    showNotice(`Wetterort gespeichert: ${location}.`);
+    showNotice('Wetterort und See gespeichert.');
   } catch (error) {
     showNotice(error.message || 'Wetterort konnte nicht gespeichert werden.', 'danger');
   } finally {
@@ -987,7 +1012,8 @@ async function loadCurrentWaterTemperature() {
   const status = element('waterTemperatureAutoStatus');
   status.textContent = 'Wassertemperatur wird geladen…';
   try {
-    const response = await fetch('/api/water-temperature', { cache: 'no-store' });
+    const lake = waterLakeIds.has(state.boat.waterLake) ? state.boat.waterLake : defaultWaterLake;
+    const response = await fetch(`/api/water-temperature?lake=${encodeURIComponent(lake)}`, { cache: 'no-store' });
     const data = await response.json();
     if (!response.ok || !Number.isFinite(Number(data.temperature_c))) throw new Error(data.error || 'Wassertemperatur nicht verfügbar.');
     if (requestId !== state.waterTemperatureRequestId || element('tripId').value) return;

@@ -1,7 +1,22 @@
-const lake = 'lucernekreuztrichterandvitznauerbecken';
 const model = 'simstrat';
 const depthMetres = 1;
 const cacheDurationMs = 3 * 60 * 60 * 1000;
+const lakes = {
+  lucernekreuztrichterandvitznauerbecken: 'Vierwaldstättersee – Kreuztrichter / Vitznauerbecken',
+  zug: 'Zugersee',
+  walensee: 'Walensee',
+  upperzurich: 'Zürichsee – Obersee',
+  lowerzurich: 'Zürichsee – Untersee',
+  thun: 'Thunersee',
+  brienz: 'Brienzersee',
+  upperconstance: 'Bodensee – Obersee',
+  lowerconstance: 'Bodensee – Untersee',
+  geneva: 'Genfersee',
+  maggiore: 'Lago Maggiore',
+  upperlugano: 'Luganersee – Nordbecken',
+  lowerlugano: 'Luganersee – Südbecken'
+};
+const defaultLake = 'lucernekreuztrichterandvitznauerbecken';
 
 function alplakesDate(value) {
   const year = value.getUTCFullYear();
@@ -19,9 +34,14 @@ function jsonResponse(body, status = 200, headers = {}) {
 }
 
 export async function onRequestGet({ request, waitUntil }) {
+  const requestUrl = new URL(request.url);
+  const lake = requestUrl.searchParams.get('lake') || defaultLake;
+  if (!lakes[lake]) {
+    return jsonResponse({ error: 'Unbekannter See.' }, 400, { 'Cache-Control': 'no-store' });
+  }
   const now = new Date();
   const cacheSlot = Math.floor(now.getTime() / cacheDurationMs);
-  const cacheKey = new Request(`${new URL(request.url).origin}/api/water-temperature?slot=${cacheSlot}`);
+  const cacheKey = new Request(`${requestUrl.origin}/api/water-temperature?lake=${encodeURIComponent(lake)}&slot=${cacheSlot}`);
   const cached = await caches.default.match(cacheKey);
   if (cached) return cached;
 
@@ -50,7 +70,7 @@ export async function onRequestGet({ request, waitUntil }) {
       measured_at: closest.time,
       source: 'Alplakes, Eawag',
       source_url: 'https://www.alplakes.eawag.ch/',
-      lake: 'Kreuztrichter / Vitznauerbecken',
+      lake: lakes[lake],
       depth_m: depthMetres,
       modelled: true
     }, 200, { 'Cache-Control': 'public, max-age=10800' });
