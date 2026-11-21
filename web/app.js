@@ -15,6 +15,7 @@ const state = {
   costSharingAvailable: true,
   costsViewMode: 'entries',
   seasonReview: null,
+  tripFilters: { open: false, query: '', from: '', to: '', weather: '' },
   activeTrip: null,
   finishingLiveTrip: false,
   weatherRequestId: 0,
@@ -116,6 +117,12 @@ function registerEvents() {
   element('showTripForm').addEventListener('click', () => resetTripForm(true));
   element('cancelTripForm').addEventListener('click', () => state.finishingLiveTrip ? cancelLiveTrip() : resetTripForm(false));
   element('tripForm').addEventListener('submit', saveTrip);
+  element('toggleTripFilters').addEventListener('click', toggleTripFilters);
+  element('tripFilterQuery').addEventListener('input', event => { state.tripFilters.query = event.target.value; renderTrips(); });
+  element('tripFilterFrom').addEventListener('change', event => { state.tripFilters.from = event.target.value; renderTrips(); });
+  element('tripFilterTo').addEventListener('change', event => { state.tripFilters.to = event.target.value; renderTrips(); });
+  element('tripFilterWeather').addEventListener('change', event => { state.tripFilters.weather = event.target.value; renderTrips(); });
+  element('resetTripFilters').addEventListener('click', resetTripFilters);
   element('showCostForm').addEventListener('click', () => { showCostsView('entries'); resetCostForm(true); });
   element('cancelCostForm').addEventListener('click', () => resetCostForm(false));
   element('costForm').addEventListener('submit', saveCost);
@@ -683,7 +690,9 @@ function renderTrend() {
 }
 
 function renderTrips() {
-  const trips = currentTrips();
+  const allTrips = currentTrips();
+  const trips = filteredTrips(allTrips);
+  renderTripFilters(allTrips, trips);
   element('tripList').innerHTML = trips.length ? trips.map(trip => {
     const hours = numberOrZero(trip.engine_end) - numberOrZero(trip.engine_start);
     const date = new Date(trip.start_at).toLocaleDateString('de-CH');
@@ -694,7 +703,57 @@ function renderTrips() {
       trip.water_temperature_c !== null && trip.water_temperature_c !== undefined ? `<span><i class="bi bi-droplet-fill text-primary me-1"></i>${trip.water_temperature_c}°C</span>` : ''
     ].filter(Boolean).join('');
     return `<div class="swipe-entry" data-delete-kind="trip" data-delete-id="${trip.id}"><button class="swipe-delete-action" type="button" data-swipe-delete aria-label="Ausflug löschen"><i class="bi bi-trash3"></i><span>Löschen</span></button><article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="showTripDetails('${trip.id}')" aria-label="Details"><i class="bi bi-chevron-right"></i></button><button class="btn btn-link btn-sm p-0 ms-2" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article></div>`;
-  }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
+  }).join('') : `<div class="empty-state">${allTrips.length && hasTripFilters() ? 'Keine Ausflüge entsprechen den gewählten Filtern.' : 'Für dieses Jahr sind noch keine Ausflüge erfasst.'}</div>`;
+}
+
+function normalizedTripSearch(value) {
+  return String(value || '').trim().toLocaleLowerCase('de-CH');
+}
+
+function tripFilterDate(trip) {
+  return localDateTime(trip.start_at).slice(0, 10);
+}
+
+function filteredTrips(trips) {
+  const { query, from, to, weather } = state.tripFilters;
+  const search = normalizedTripSearch(query);
+  return trips.filter(trip => {
+    const date = tripFilterDate(trip);
+    const searchable = normalizedTripSearch(`${trip.remarks || ''} ${trip.weather || ''}`);
+    return (!search || searchable.includes(search))
+      && (!from || date >= from)
+      && (!to || date <= to)
+      && (!weather || trip.weather === weather);
+  });
+}
+
+function hasTripFilters() {
+  const { query, from, to, weather } = state.tripFilters;
+  return Boolean(query || from || to || weather);
+}
+
+function renderTripFilters(allTrips, trips) {
+  const { open, query, from, to, weather } = state.tripFilters;
+  const weatherValues = [...new Set(allTrips.map(trip => String(trip.weather || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right, 'de-CH'));
+  element('tripFilterPanel').classList.toggle('d-none', !open);
+  element('toggleTripFilters').classList.toggle('btn-primary', hasTripFilters());
+  element('toggleTripFilters').classList.toggle('btn-outline-secondary', !hasTripFilters());
+  element('toggleTripFilters').setAttribute('aria-expanded', String(open));
+  element('tripFilterQuery').value = query;
+  element('tripFilterFrom').value = from;
+  element('tripFilterTo').value = to;
+  element('tripFilterWeather').innerHTML = `<option value="">Alle Wetter</option>${weatherValues.map(value => `<option value="${escapeHtml(value)}"${value === weather ? ' selected' : ''}>${escapeHtml(value)}</option>`).join('')}`;
+  element('tripFilterResult').textContent = hasTripFilters() ? `${trips.length} von ${allTrips.length} Ausflügen werden angezeigt.` : `${allTrips.length} Ausflüge im Jahr ${state.selectedYear}.`;
+}
+
+function toggleTripFilters() {
+  state.tripFilters.open = !state.tripFilters.open;
+  renderTrips();
+}
+
+function resetTripFilters() {
+  state.tripFilters = { ...state.tripFilters, query: '', from: '', to: '', weather: '' };
+  renderTrips();
 }
 
 function setupSwipeToDelete(container) {
