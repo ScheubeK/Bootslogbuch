@@ -22,16 +22,19 @@ Hinweis, dass bei Bedarf Hilfe erreichbar sein könnte.
   ist.
 - Die Liste zeigt mindestens Bootsname und „unterwegs seit“. Der eigene
   laufende Ausflug wird weiterhin im Tab **Ausflüge** gesteuert.
-- Eine spätere Ausbaustufe könnte einen freiwilligen Hilfehinweis oder
-  Kontaktweg pro Boot erlauben.
+- Eine spätere Ausbaustufe könnte einen freiwilligen Kontaktweg pro Boot
+  erlauben. Gedacht ist dies für unkomplizierte Hilfe unter Bekannten – etwa
+  wenn ein Boot ein Motorproblem hat und ein sichtbarer Freund auf dem See
+  angerufen werden kann.
 
 ### Grenzen und Datenschutz
 
 - Die bestehende Tabelle `active_trips` liefert nur den Status und die
   Startzeit eines laufenden Ausflugs – **keine** GPS-Position, Route oder
   Echtzeitortung.
-- Es ist keine Notfall- oder Sicherheitsüberwachung. Bei Gefahr gelten die
-  offiziellen Notruf- und Seerettungswege.
+- Es ist keine Notfall- oder Sicherheitsüberwachung. Der Kontaktweg dient nur
+  der freiwilligen, privaten Hilfe; bei Gefahr gelten die offiziellen Notruf-
+  und Seerettungswege.
 - Für die Umsetzung wären neue Sichtbarkeitsregeln in Supabase, eine explizite
   Einwilligung des Kapitäns sowie eine Ergänzung der Datenschutzerklärung und
   Nutzungsbedingungen nötig.
