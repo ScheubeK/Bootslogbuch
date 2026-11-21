@@ -113,7 +113,7 @@ function registerEvents() {
   element('showTripForm').addEventListener('click', () => resetTripForm(true));
   element('cancelTripForm').addEventListener('click', () => state.finishingLiveTrip ? cancelLiveTrip() : resetTripForm(false));
   element('tripForm').addEventListener('submit', saveTrip);
-  element('showCostForm').addEventListener('click', () => resetCostForm(true));
+  element('showCostForm').addEventListener('click', () => { showCostsView('entries'); resetCostForm(true); });
   element('cancelCostForm').addEventListener('click', () => resetCostForm(false));
   element('costForm').addEventListener('submit', saveCost);
   element('costCategory').addEventListener('change', updateFuelFields);
