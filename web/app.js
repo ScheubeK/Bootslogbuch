@@ -761,7 +761,8 @@ function renderWeatherSettings() {
   element('backupDataCard').classList.toggle('d-none', !isOwner);
   element('resetDataCard').classList.toggle('d-none', !isOwner);
   const resetYears = availableDataYears();
-  element('resetDataYear').innerHTML = [`<option value="all">Alle Jahre</option>`, ...resetYears.map(year => `<option value="${year}"${year === state.selectedYear ? ' selected' : ''}>Nur Jahr ${year}</option>`)].join('');
+  const defaultResetYear = resetYears[resetYears.length - 1];
+  element('resetDataYear').innerHTML = [...resetYears.map(year => `<option value="${year}"${year === defaultResetYear ? ' selected' : ''}>Nur Jahr ${year}</option>`), '<option value="all">Alle Jahre</option>'].join('');
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
     ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
