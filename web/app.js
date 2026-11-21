@@ -14,6 +14,7 @@ const state = {
   costSettlements: [],
   costSharingAvailable: true,
   costsViewMode: 'entries',
+  seasonReview: null,
   activeTrip: null,
   finishingLiveTrip: false,
   weatherRequestId: 0,
@@ -105,6 +106,7 @@ function registerEvents() {
   element('dashboardMetricsForm').addEventListener('submit', saveDashboardMetrics);
   element('dashboardMetricsReset').addEventListener('click', restoreDashboardMetrics);
   element('seasonReviewButton').addEventListener('click', showSeasonReview);
+  element('seasonReviewShareButton').addEventListener('click', shareSeasonReview);
   element('signOutButton').addEventListener('click', signOut);
   element('switchBoatButton').addEventListener('click', switchBoat);
   element('boatSwitchList').addEventListener('click', event => {
@@ -520,7 +522,10 @@ function seasonDate(value) {
 function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, seaTime, wine }) {
   const hasData = trips.length > 0 || costs.length > 0;
   element('seasonReviewCard').classList.toggle('d-none', !hasData);
-  if (!hasData) return;
+  if (!hasData) {
+    state.seasonReview = null;
+    return;
+  }
   const orderedTrips = [...trips].sort((left, right) => new Date(left.start_at) - new Date(right.start_at));
   const firstTrip = orderedTrips[0];
   const lastTrip = orderedTrips[orderedTrips.length - 1];
@@ -537,6 +542,7 @@ function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, sea
     longestTrip ? { icon: 'bi-clock-history', label: 'Längster Ausflug', value: `${formatHours(longestTrip.duration / 3600000)} · ${seasonDate(longestTrip.trip.start_at)}` } : null,
     warmestWater ? { icon: 'bi-droplet-fill', label: 'Wärmstes Wasser', value: `${Number(warmestWater.water_temperature_c).toLocaleString('de-CH', { maximumFractionDigits: 1 })} °C · ${seasonDate(warmestWater.start_at)}` } : null
   ].filter(Boolean);
+  state.seasonReview = { year: state.selectedYear, boatName: state.boat.name, trips: trips.length, seaTime, engineHours, wine, totalCosts, highlights };
   element('seasonReviewTitle').textContent = `Saison ${state.selectedYear} · ${state.boat.name}`;
   element('seasonReviewHint').textContent = `Die Highlights aus ${state.selectedYear} ansehen.`;
   element('seasonReviewBody').innerHTML = `
@@ -556,6 +562,37 @@ function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, sea
 
 function showSeasonReview() {
   bootstrap.Modal.getOrCreateInstance(element('seasonReviewModal')).show();
+}
+
+async function shareSeasonReview() {
+  const review = state.seasonReview;
+  if (!review) return showNotice('Für diesen Saisonrückblick sind keine Daten vorhanden.', 'warning');
+  const text = [
+    `Saisonrückblick ${review.year} · ${review.boatName}`,
+    '',
+    `${review.trips} Ausflüge`,
+    `${formatHours(review.seaTime)} auf See`,
+    `${review.engineHours.toFixed(1).replace('.', ',')} Motorstunden`,
+    `${review.wine} Flaschen Wein`,
+    `${formatCurrency(review.totalCosts)} Kosten`,
+    ...review.highlights.map(highlight => `${highlight.label}: ${highlight.value}`)
+  ].join('\n');
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `Saisonrückblick ${review.year} · ${review.boatName}`, text, url: window.location.origin });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    showNotice('Saisonrückblick in die Zwischenablage kopiert.');
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotice('Saisonrückblick in die Zwischenablage kopiert.');
+    } catch (_) {
+      window.prompt('Saisonrückblick kopieren:', text);
+    }
+  }
 }
 
 function renderDashboardSettings() {
