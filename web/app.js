@@ -132,6 +132,8 @@ function registerEvents() {
   element('exportExcelButton').addEventListener('click', exportExcel);
   element('importExcelInput').addEventListener('change', importExcel);
   element('resetDataButton').addEventListener('click', resetBoatData);
+  setupSwipeToDelete(element('tripList'));
+  setupSwipeToDelete(element('costList'));
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => element(id).addEventListener('change', event => {
     state.selectedYear = event.target.value;
     syncYearSelectors();
@@ -415,11 +417,16 @@ async function loadCostSharing() {
   state.costSettlements = settlements || [];
 }
 
-function populateYears() {
+function availableDataYears() {
   const years = new Set([String(new Date().getFullYear())]);
   state.trips.forEach(trip => years.add(dateYear(trip.start_at)));
   state.costs.forEach(cost => years.add(dateYear(cost.cost_date)));
-  const sorted = [...years].filter(year => /^\d{4}$/.test(year)).sort((a, b) => Number(b) - Number(a));
+  state.costSettlements.forEach(settlement => years.add(dateYear(settlement.settlement_date)));
+  return [...years].filter(year => /^\d{4}$/.test(year)).sort((a, b) => Number(b) - Number(a));
+}
+
+function populateYears() {
+  const sorted = availableDataYears();
   if (!sorted.includes(state.selectedYear)) state.selectedYear = sorted[0];
   ['dashboardYear', 'tripsYear', 'costsYear'].forEach(id => {
     element(id).innerHTML = sorted.map(year => `<option value="${year}">${year}</option>`).join('');
@@ -602,8 +609,45 @@ function renderTrips() {
       trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `<span><i class="bi bi-wind me-1"></i>${trip.wind_kmh} km/h</span>` : '',
       trip.water_temperature_c !== null && trip.water_temperature_c !== undefined ? `<span><i class="bi bi-droplet-fill text-primary me-1"></i>${trip.water_temperature_c}°C</span>` : ''
     ].filter(Boolean).join('');
-    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="showTripDetails('${trip.id}')" aria-label="Details"><i class="bi bi-chevron-right"></i></button><button class="btn btn-link btn-sm p-0 ms-2" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article>`;
+    return `<div class="swipe-entry" data-delete-kind="trip" data-delete-id="${trip.id}"><button class="swipe-delete-action" type="button" data-swipe-delete aria-label="Ausflug löschen"><i class="bi bi-trash3"></i><span>Löschen</span></button><article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${date}</strong><div class="small text-secondary">${hours.toFixed(1).replace('.', ',')} Motorstunden${trip.wine_bottles ? ` · ${trip.wine_bottles} Fl. Wein` : ''}</div></div><div><button class="btn btn-link btn-sm p-0" onclick="showTripDetails('${trip.id}')" aria-label="Details"><i class="bi bi-chevron-right"></i></button><button class="btn btn-link btn-sm p-0 ms-2" onclick="editTrip('${trip.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteTrip('${trip.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div>${conditions ? `<div class="trip-conditions small text-secondary mt-2">${conditions}</div>` : ''}${trip.remarks ? `<p class="small mb-0 mt-2">${escapeHtml(trip.remarks)}</p>` : ''}</div></article></div>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>';
+}
+
+function setupSwipeToDelete(container) {
+  let gesture = null;
+  const closeOpenEntries = except => container.querySelectorAll('.swipe-entry.is-delete-revealed').forEach(entry => { if (entry !== except) entry.classList.remove('is-delete-revealed'); });
+  container.addEventListener('pointerdown', event => {
+    const entry = event.target.closest('.swipe-entry');
+    if (!entry || event.pointerType === 'mouse' || event.target.closest('button, a, input, select, textarea, label')) return;
+    gesture = { entry, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, horizontal: false };
+    container.setPointerCapture?.(event.pointerId);
+  });
+  container.addEventListener('pointermove', event => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.horizontal && Math.abs(deltaX) > 12 && Math.abs(deltaX) > Math.abs(deltaY)) gesture.horizontal = true;
+    if (!gesture.horizontal) return;
+    event.preventDefault();
+    if (deltaX < -22) {
+      closeOpenEntries(gesture.entry);
+      gesture.entry.classList.add('is-delete-revealed');
+    } else if (deltaX > 22) gesture.entry.classList.remove('is-delete-revealed');
+  });
+  container.addEventListener('pointerup', event => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    if (gesture.horizontal && deltaX > -60) gesture.entry.classList.remove('is-delete-revealed');
+    gesture = null;
+  });
+  container.addEventListener('pointercancel', () => { if (gesture) gesture.entry.classList.remove('is-delete-revealed'); gesture = null; });
+  container.addEventListener('click', event => {
+    const button = event.target.closest('[data-swipe-delete]');
+    if (!button) return;
+    const entry = button.closest('.swipe-entry');
+    if (entry?.dataset.deleteKind === 'trip') window.deleteTrip(entry.dataset.deleteId);
+    if (entry?.dataset.deleteKind === 'cost') window.deleteCost(entry.dataset.deleteId);
+  });
 }
 
 function localDateTime(value) {
@@ -716,6 +760,8 @@ function renderWeatherSettings() {
   element('weatherSettingsForm').classList.toggle('d-none', !isOwner);
   element('backupDataCard').classList.toggle('d-none', !isOwner);
   element('resetDataCard').classList.toggle('d-none', !isOwner);
+  const resetYears = availableDataYears();
+  element('resetDataYear').innerHTML = [`<option value="all">Alle Jahre</option>`, ...resetYears.map(year => `<option value="${year}"${year === state.selectedYear ? ' selected' : ''}>Nur Jahr ${year}</option>`)].join('');
   element('weatherLocation').value = state.boat.weatherLocation || defaultWeatherLocation;
   element('weatherSettingsHint').textContent = isOwner
     ? 'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.'
@@ -724,16 +770,21 @@ function renderWeatherSettings() {
 
 async function resetBoatData(event) {
   if (state.role !== 'owner') return showNotice('Nur der Kapitän kann das Logbuch löschen.', 'danger');
-  if (!confirm(`Wirklich alle Ausflüge und Kosten von „${state.boat.name}“ löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+  const scope = element('resetDataYear').value;
+  const allYears = scope === 'all';
+  const description = allYears ? 'alle Ausflüge, Kosten und Ausgleichszahlungen' : `alle Ausflüge, Kosten und Ausgleichszahlungen aus dem Jahr ${scope}`;
+  if (!confirm(`Wirklich ${description} von „${state.boat.name}“ löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
   const button = event.currentTarget;
   setBusy(button, true, 'Wird gelöscht…');
-  const { error } = await state.client.rpc('reset_boat_data', { target_boat_id: state.boat.id });
-  setBusy(button, false, 'Logbuch und Kosten löschen');
+  const { error } = allYears
+    ? await state.client.rpc('reset_boat_data', { target_boat_id: state.boat.id })
+    : await state.client.rpc('delete_boat_year_data', { target_boat_id: state.boat.id, target_year: Number(scope) });
+  setBusy(button, false, 'Löschen');
   if (error) return showNotice(error.message, 'danger');
   state.activeTrip = null;
   state.finishingLiveTrip = false;
   await loadBoatData();
-  showNotice('Logbuch und Kosten wurden gelöscht.');
+  showNotice(allYears ? 'Alle Logbuch- und Kostendaten wurden gelöscht.' : `Die Daten aus ${scope} wurden gelöscht.`);
 }
 
 async function saveWeatherLocation(event) {
@@ -918,7 +969,7 @@ function renderCosts() {
   const costs = currentCosts();
   element('costList').innerHTML = costs.length ? costs.map(cost => {
     const sharing = isSharedCost(cost.id) ? `<div class="small text-secondary mt-1"><i class="bi bi-people me-1"></i>Geteilt${cost.paid_by ? ` · bezahlt von ${escapeHtml(participantName(cost.paid_by))}` : ''}</div>` : '';
-    return `<article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div>${sharing}</div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article>`;
+    return `<div class="swipe-entry" data-delete-kind="cost" data-delete-id="${cost.id}"><button class="swipe-delete-action" type="button" data-swipe-delete aria-label="Kostenposten löschen"><i class="bi bi-trash3"></i><span>Löschen</span></button><article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div>${sharing}</div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article></div>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Kosten erfasst.</div>';
   showCostsView(state.costsViewMode, false);
 }
