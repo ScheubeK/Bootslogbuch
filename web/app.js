@@ -539,6 +539,7 @@ function renderDashboard() {
     const metric = metrics[id];
     return `<div class="${isWide ? 'col-12' : 'col-6'}"><div class="metric-card ${definition.theme}"><i class="bi ${definition.icon}"></i><span>${definition.label}</span><strong>${metric.value}</strong>${metric.comparison ? `<span>${metric.comparison}</span>` : ''}</div></div>`;
   }).join('');
+  element('costBreakdown').innerHTML = categories.map(category => `<div class="col-6"><div class="small text-secondary">${category}</div><strong>${formatCurrency(totals[category])}</strong></div>`).join('');
   renderSeasonReview({ trips, costs, engineHours, seaTime, fuelLitres, hasFuelData: fuelEntries.length > 0 });
   renderTrend();
 }
