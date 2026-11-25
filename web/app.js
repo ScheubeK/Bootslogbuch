@@ -539,8 +539,7 @@ function renderDashboard() {
     const metric = metrics[id];
     return `<div class="${isWide ? 'col-12' : 'col-6'}"><div class="metric-card ${definition.theme}"><i class="bi ${definition.icon}"></i><span>${definition.label}</span><strong>${metric.value}</strong>${metric.comparison ? `<span>${metric.comparison}</span>` : ''}</div></div>`;
   }).join('');
-  element('costBreakdown').innerHTML = categories.map(category => `<div class="col-6"><div class="small text-secondary">${category}</div><strong>${formatCurrency(totals[category])}</strong></div>`).join('');
-  renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, seaTime, wine });
+  renderSeasonReview({ trips, costs, engineHours, seaTime, fuelLitres, hasFuelData: fuelEntries.length > 0 });
   renderTrend();
 }
 
@@ -548,7 +547,7 @@ function seasonDate(value) {
   return new Date(value).toLocaleDateString('de-CH', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, seaTime, wine }) {
+function renderSeasonReview({ trips, costs, engineHours, seaTime, fuelLitres, hasFuelData }) {
   const hasData = trips.length > 0 || costs.length > 0;
   element('seasonReviewCard').classList.toggle('d-none', !hasData);
   if (!hasData) {
@@ -564,14 +563,21 @@ function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, sea
   }, null);
   const waterTrips = orderedTrips.filter(trip => trip.water_temperature_c !== null && trip.water_temperature_c !== undefined && trip.water_temperature_c !== '' && Number.isFinite(Number(trip.water_temperature_c)));
   const warmestWater = waterTrips.reduce((warmest, trip) => !warmest || Number(trip.water_temperature_c) > Number(warmest.water_temperature_c) ? trip : warmest, null);
-  const costsByCategory = categories.filter(category => totals[category] > 0).map(category => `<div class="season-cost-row"><span>${escapeHtml(category)}</span><strong>${formatCurrency(totals[category])}</strong></div>`).join('') || '<div class="text-secondary small">Keine Kosten erfasst.</div>';
+  const coldestWater = waterTrips.reduce((coldest, trip) => !coldest || Number(trip.water_temperature_c) < Number(coldest.water_temperature_c) ? trip : coldest, null);
+  const temperatureTrips = orderedTrips.filter(trip => trip.temperature_c !== null && trip.temperature_c !== undefined && trip.temperature_c !== '' && Number.isFinite(Number(trip.temperature_c)));
+  const warmestDay = temperatureTrips.reduce((warmest, trip) => !warmest || Number(trip.temperature_c) > Number(warmest.temperature_c) ? trip : warmest, null);
+  const windTrips = orderedTrips.filter(trip => trip.wind_kmh !== null && trip.wind_kmh !== undefined && trip.wind_kmh !== '' && Number.isFinite(Number(trip.wind_kmh)));
+  const strongestWind = windTrips.reduce((strongest, trip) => !strongest || Number(trip.wind_kmh) > Number(strongest.wind_kmh) ? trip : strongest, null);
   const highlights = [
     firstTrip ? { icon: 'bi-sunrise', label: 'Erste Fahrt', value: seasonDate(firstTrip.start_at) } : null,
     lastTrip ? { icon: 'bi-sunset', label: 'Letzte Fahrt', value: seasonDate(lastTrip.start_at) } : null,
     longestTrip ? { icon: 'bi-clock-history', label: 'Längster Ausflug', value: `${formatHours(longestTrip.duration / 3600000)} · ${seasonDate(longestTrip.trip.start_at)}` } : null,
-    warmestWater ? { icon: 'bi-droplet-fill', label: 'Wärmstes Wasser', value: `${Number(warmestWater.water_temperature_c).toLocaleString('de-CH', { maximumFractionDigits: 1 })} °C · ${seasonDate(warmestWater.start_at)}` } : null
+    warmestWater ? { icon: 'bi-droplet-fill', label: 'Wärmstes Wasser', value: `${Number(warmestWater.water_temperature_c).toLocaleString('de-CH', { maximumFractionDigits: 1 })} °C · ${seasonDate(warmestWater.start_at)}` } : null,
+    coldestWater ? { icon: 'bi-droplet', label: 'Kältestes Wasser', value: `${Number(coldestWater.water_temperature_c).toLocaleString('de-CH', { maximumFractionDigits: 1 })} °C · ${seasonDate(coldestWater.start_at)}` } : null,
+    warmestDay ? { icon: 'bi-thermometer-sun', label: 'Wärmster Tag', value: `${Number(warmestDay.temperature_c).toLocaleString('de-CH', { maximumFractionDigits: 1 })} °C · ${seasonDate(warmestDay.start_at)}` } : null,
+    strongestWind ? { icon: 'bi-wind', label: 'Stärkster Wind', value: `${Number(strongestWind.wind_kmh).toLocaleString('de-CH', { maximumFractionDigits: 1 })} km/h · ${seasonDate(strongestWind.start_at)}` } : null
   ].filter(Boolean);
-  state.seasonReview = { year: state.selectedYear, boatName: state.boat.name, trips: trips.length, seaTime, engineHours, wine, totalCosts, highlights };
+  state.seasonReview = { year: state.selectedYear, boatName: state.boat.name, trips: trips.length, seaTime, engineHours, fuelLitres, hasFuelData, averageTripDuration: trips.length ? seaTime / trips.length : null, highlights };
   element('seasonReviewTitle').textContent = `Saison ${state.selectedYear} · ${state.boat.name}`;
   element('seasonReviewHint').textContent = `Die Highlights aus ${state.selectedYear} ansehen.`;
   element('seasonReviewBody').innerHTML = `
@@ -580,13 +586,11 @@ function renderSeasonReview({ trips, costs, totals, totalCosts, engineHours, sea
       <div><i class="bi bi-compass"></i><span>Ausflüge</span><strong>${trips.length}</strong></div>
       <div><i class="bi bi-clock-history"></i><span>Zeit auf See</span><strong>${formatHours(seaTime)}</strong></div>
       <div><i class="bi bi-gear-wide-connected"></i><span>Motorstunden</span><strong>${engineHours.toFixed(1).replace('.', ',')} h</strong></div>
-      <div><i class="bi bi-cup-straw"></i><span>Wein</span><strong>${wine} Fl.</strong></div>
-      <div class="season-summary-wide"><i class="bi bi-cash-stack"></i><span>Kosten Total</span><strong>${formatCurrency(totalCosts)}</strong></div>
+      <div><i class="bi bi-fuel-pump"></i><span>Treibstoffverbrauch</span><strong>${hasFuelData ? `${fuelLitres.toFixed(1).replace('.', ',')} l` : '–'}</strong></div>
+      <div class="season-summary-wide"><i class="bi bi-hourglass-split"></i><span>Ø Ausflugsdauer</span><strong>${trips.length ? formatHours(seaTime / trips.length) : '–'}</strong></div>
     </div>
     <h3 class="h6 mb-3">Highlights</h3>
-    <div class="vstack gap-2 mb-4">${highlights.length ? highlights.map(highlight => `<div class="season-highlight"><i class="bi ${highlight.icon}"></i><div><span>${highlight.label}</span><strong>${highlight.value}</strong></div></div>`).join('') : '<div class="text-secondary small">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>'}</div>
-    <h3 class="h6 mb-3">Kosten nach Kategorie</h3>
-    <div class="season-cost-list">${costsByCategory}</div>`;
+    <div class="vstack gap-2">${highlights.length ? highlights.map(highlight => `<div class="season-highlight"><i class="bi ${highlight.icon}"></i><div><span>${highlight.label}</span><strong>${highlight.value}</strong></div></div>`).join('') : '<div class="text-secondary small">Für dieses Jahr sind noch keine Ausflüge erfasst.</div>'}</div>`;
 }
 
 function showSeasonReview() {
@@ -602,10 +606,10 @@ async function shareSeasonReview() {
     `${review.trips} Ausflüge`,
     `${formatHours(review.seaTime)} auf See`,
     `${review.engineHours.toFixed(1).replace('.', ',')} Motorstunden`,
-    `${review.wine} Flaschen Wein`,
-    `${formatCurrency(review.totalCosts)} Kosten`,
+    review.hasFuelData ? `${review.fuelLitres.toFixed(1).replace('.', ',')} l Treibstoff` : null,
+    review.averageTripDuration !== null ? `Ø Ausflugsdauer ${formatHours(review.averageTripDuration)}` : null,
     ...review.highlights.map(highlight => `${highlight.label}: ${highlight.value}`)
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   try {
     if (navigator.share) {
       await navigator.share({ title: `Saisonrückblick ${review.year} · ${review.boatName}`, text, url: window.location.origin });
