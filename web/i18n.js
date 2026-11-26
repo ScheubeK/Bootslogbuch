@@ -2,6 +2,10 @@
 (function () {
   const english = {
     'Jede Fahrt festgehalten.': 'Every trip recorded.',
+    'Melde dich mit deinem Google-Konto an.': 'Sign in with your Google account.',
+    'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.': 'Sign in with your email address and password.',
+    'Erstelle hier dein Konto. Falls du eingeladen wurdest, verwende die E-Mail-Adresse deiner Crew-Einladung.': 'Create your account here. If you were invited, use the email address from your crew invitation.',
+    'Informationen über Bootslogbuch sowie Datenschutz und Nutzungsbedingungen.': 'Information about Bootslogbuch, privacy and terms of service.',
     'Mit Google anmelden': 'Sign in with Google', 'oder': 'or', 'Mit E-Mail anmelden': 'Sign in with email',
     'E-Mail-Adresse': 'Email address', 'Passwort': 'Password', 'Anmelden': 'Sign in', 'Neu bei Bootslogbuch?': 'New to Bootslogbuch?',
     'Hier Konto einrichten': 'Create an account', 'Passwort einrichten / vergessen': 'Set / reset password', 'Zurück zur Anmeldung': 'Back to sign in',
@@ -32,7 +36,12 @@
     'Kältestes Wasser': 'Coldest water', 'Wärmster Tag': 'Warmest day', 'Stärkster Wind': 'Strongest wind',
     'Kosten / Motorstunde': 'Costs / engine hour', 'Kosten / Ausflug': 'Costs / trip', 'Treibstoff verbraucht': 'Fuel used',
     'Treibstoff / Motorstunde': 'Fuel / engine hour', 'Kosten / Seestunde': 'Costs / hour on water',
-    'Sprache': 'Language', 'Deutsch': 'German', 'Englisch': 'English'
+    'Für neue Ausflüge werden Wetterdaten und die Wassertemperatur automatisch übernommen.': 'Weather data and water temperature are automatically suggested for new trips.',
+    'Exportiert alle Ausflüge, Kosten und – falls verwendet – die Kostenaufteilung dieses Boots in eine Excel-Datei. Ein Import fügt die enthaltenen Daten diesem Boot hinzu.': 'Exports all trips, costs and, if used, cost sharing for this boat to an Excel file. An import adds the included data to this boat.',
+    'Löscht Ausflüge, Kosten und Ausgleichszahlungen eines Jahres oder des ganzen Boots. Boot, Crew, Kostenbeteiligte und Wetterort bleiben bestehen.': 'Deletes trips, costs and settlements for one year or the entire boat. The boat, crew, cost participants and weather location remain.',
+    'Für neue Ausflüge werden Wetter, Temperatur und Wind automatisch übernommen.': 'Weather, temperature and wind are automatically suggested for new trips.',
+    'Crewmitglied': 'Crew member', 'Offene Einladungen': 'Open invitations', 'Einladungslink kopieren': 'Copy invitation link', 'Zurückziehen': 'Revoke',
+    'Sprache': 'Language', 'Deutsch': 'German', 'Englisch': 'English', 'name@beispiel.ch': 'name@example.com'
   };
   const attributes = ['placeholder', 'aria-label', 'title'];
   function translated(value, locale) {
