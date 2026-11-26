@@ -14,6 +14,7 @@
 </head>
 <body>
   <main class="container app-shell py-3">
+    <label class="language-picker" for="languagePicker"><span class="visually-hidden">Sprache</span><i class="bi bi-translate"></i><select id="languagePicker" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select></label>
     <div id="notice" class="alert d-none" role="alert" aria-live="assertive"></div>
 
     <section id="loadingScreen" class="text-center py-5">
@@ -152,6 +153,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="./i18n.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

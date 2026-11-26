@@ -1,5 +1,6 @@
 :root { color-scheme: light; }
 body { background: #f1f4f8; min-height: 100vh; }
+.language-picker { position: fixed; z-index: 1090; top: max(.75rem, env(safe-area-inset-top)); right: .75rem; display: flex; align-items: center; gap: .25rem; padding: .2rem .35rem; border: 1px solid #d7dee7; border-radius: .45rem; background: rgba(255,255,255,.95); color: #53606d; box-shadow: 0 .15rem .45rem rgba(0,0,0,.08); font-size: .8rem; }.language-picker select { border: 0; outline: 0; background: transparent; color: inherit; font-size: .8rem; }
 #notice { position: fixed; z-index: 1080; top: max(.75rem, env(safe-area-inset-top)); left: 50%; width: min(calc(100vw - 2rem), 620px); margin: 0; transform: translateX(-50%); box-shadow: 0 .35rem 1rem rgba(0, 0, 0, .16); }
 .app-shell { max-width: 760px; }
 .auth-card { max-width: 470px; margin: 9vh auto; }

@@ -37,6 +37,7 @@ Supabase **SQL Editor** ausgeführt:
 11. `202611200004_import_full_cost_backup.sql`
 12. `202611210001_delete_boat_year_data.sql`
 13. `202611210002_add_boat_water_lake.sql`
+14. `202611260001_add_profile_locale.sql`
 
 Die erste Migration enthält Tabellen, Auth-Profile, Rollen, Einladungen und
 Row-Level-Security. Die zweite verhindert, dass ein Kapitän seine einzige

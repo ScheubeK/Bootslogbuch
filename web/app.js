@@ -23,12 +23,14 @@ const state = {
   dashboardMetricsAvailable: true,
   authMode: 'signin',
   passwordRecovery: false,
+  locale: localStorage.getItem('bootslogbuch.locale') === 'en' ? 'en' : 'de',
   selectedYear: String(new Date().getFullYear())
 };
 
 const categories = ['Treibstoff', 'Versicherungen', 'Steuern', 'Bootsplatz', 'Unterhalt'];
-const money = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' });
-const number = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
+const appLocale = () => state.locale === 'en' ? 'en-GB' : 'de-CH';
+const money = value => new Intl.NumberFormat(appLocale(), { style: 'currency', currency: 'CHF' }).format(Number(value) || 0);
+const number = value => new Intl.NumberFormat(appLocale(), { maximumFractionDigits: 0 }).format(Number(value) || 0);
 const defaultWeatherLocation = 'Hergiswil NW, Schweiz';
 const defaultWeatherCoordinates = { lat: 46.98515, lon: 8.30956 };
 const defaultWaterLake = 'lucernekreuztrichterandvitznauerbecken';
@@ -69,7 +71,7 @@ const element = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
 })[character]);
-const formatCurrency = value => money.format(Number(value) || 0);
+const formatCurrency = value => money(value);
 const numberOrZero = value => {
   const compact = String(value ?? '').replace(/[’'\s]/g, '');
   const normalized = compact.includes(',') ? compact.replace(/\./g, '').replace(',', '.') : compact;
@@ -77,6 +79,30 @@ const numberOrZero = value => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const dateYear = value => String(value || '').slice(0, 4);
+const localize = root => window.BootslogbuchI18n?.localize(root, state.locale);
+function applyLanguage() {
+  document.documentElement.lang = state.locale;
+  element('languagePicker').value = state.locale;
+  const documentPages = { './info.html': './info-en.html', './privacy.html': './privacy-en.html', './terms.html': './terms-en.html', './manual.html': './manual-en.html' };
+  document.querySelectorAll('a[href]').forEach(link => {
+    const germanHref = link.dataset.germanHref || link.getAttribute('href');
+    if (!Object.hasOwn(documentPages, germanHref)) return;
+    link.dataset.germanHref = germanHref;
+    link.setAttribute('href', state.locale === 'en' ? documentPages[germanHref] : germanHref);
+  });
+  localize(document.body);
+}
+async function changeLanguage(locale) {
+  state.locale = locale === 'en' ? 'en' : 'de';
+  localStorage.setItem('bootslogbuch.locale', state.locale);
+  if (state.profile) {
+    state.profile.locale = state.locale;
+    const { error } = await state.client.from('profiles').update({ locale: state.locale }).eq('id', state.user.id);
+    if (error && !['42703', 'PGRST204'].includes(error.code)) showNotice(error.message, 'danger');
+  }
+  if (state.boat) renderAll(); else setAuthMode(state.authMode);
+  applyLanguage();
+}
 const boatFromMembership = membership => ({
   id: membership.boat_id,
   role: membership.role,
@@ -91,6 +117,7 @@ document.addEventListener('DOMContentLoaded', initialize);
 
 async function initialize() {
   registerEvents();
+  applyLanguage();
   try {
     const response = await fetch('/api/config', { cache: 'no-store' });
     const config = await response.json();
@@ -113,6 +140,7 @@ async function initialize() {
 }
 
 function registerEvents() {
+  element('languagePicker').addEventListener('change', event => changeLanguage(event.target.value));
   element('emailAuthForm').addEventListener('submit', submitEmailAuth);
   element('googleLoginButton').addEventListener('click', signInWithGoogle);
   element('showRegistrationButton').addEventListener('click', () => setAuthMode('signup'));
@@ -222,6 +250,7 @@ function setAuthMode(mode) {
     password.setCustomValidity('');
     confirmation.setCustomValidity('');
   }
+  applyLanguage();
 }
 
 function passwordValidationMessage(password) {
@@ -299,7 +328,7 @@ async function signInWithGoogle(event) {
 
 async function loadProfileAndBoats() {
   const [{ data: selectedProfile, error: selectedProfileError }, { data: memberships, error: membershipError }] = await Promise.all([
-    state.client.from('profiles').select('id, email, display_name, dashboard_metrics').eq('id', state.user.id).maybeSingle(),
+    state.client.from('profiles').select('id, email, display_name, dashboard_metrics, locale').eq('id', state.user.id).maybeSingle(),
     state.client.from('boat_memberships').select('boat_id, role, boats(id, name)').eq('user_id', state.user.id)
   ]);
   let profile = selectedProfile;
@@ -327,6 +356,8 @@ async function loadProfileAndBoats() {
     return;
   }
   state.profile = profile;
+  if (profile.locale === 'en' || profile.locale === 'de') state.locale = profile.locale;
+  applyLanguage();
   state.boats = (memberships || []).map(boatFromMembership).filter(boat => boat.name);
 
   await acceptInvitationFromUrl();
@@ -482,12 +513,13 @@ function renderAll() {
   renderLiveTrip();
   renderWeatherSettings();
   renderCrew();
+  applyLanguage();
 }
 
 function currentTrips() { return state.trips.filter(trip => dateYear(trip.start_at) === state.selectedYear); }
 function currentCosts() { return state.costs.filter(cost => dateYear(cost.cost_date) === state.selectedYear); }
 function seaHours(trips) { return trips.reduce((sum, trip) => sum + Math.max(0, new Date(trip.end_at) - new Date(trip.start_at)), 0) / 3600000; }
-function formatHours(value) { return `${value.toFixed(1).replace('.', ',')} h`; }
+function formatHours(value) { const formatted = value.toFixed(1); return `${state.locale === 'en' ? formatted : formatted.replace('.', ',')} h`; }
 function selectedDashboardMetrics(value = state.profile?.dashboard_metrics) {
   if (!Array.isArray(value)) return [...defaultDashboardMetrics];
   const selected = [...new Set(value.filter(id => dashboardMetricIds.has(id)))];
@@ -545,7 +577,7 @@ function renderDashboard() {
 }
 
 function seasonDate(value) {
-  return new Date(value).toLocaleDateString('de-CH', { day: '2-digit', month: 'long', year: 'numeric' });
+  return new Date(value).toLocaleDateString(appLocale(), { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 function renderSeasonReview({ trips, costs, engineHours, seaTime, fuelLitres, hasFuelData }) {
@@ -722,7 +754,7 @@ function renderTrips() {
   renderTripFilters(allTrips, trips);
   element('tripList').innerHTML = trips.length ? trips.map(trip => {
     const hours = numberOrZero(trip.engine_end) - numberOrZero(trip.engine_start);
-    const date = new Date(trip.start_at).toLocaleDateString('de-CH');
+    const date = new Date(trip.start_at).toLocaleDateString(appLocale());
     const conditions = [
       trip.temperature_c !== null && trip.temperature_c !== undefined ? `<span><i class="bi bi-thermometer-half text-danger me-1"></i>${trip.temperature_c}°C</span>` : '',
       trip.weather ? `<span><i class="bi bi-cloud-sun me-1"></i>${escapeHtml(trip.weather)}</span>` : '',
@@ -867,7 +899,7 @@ function renderLiveTrip() {
   element('liveTripSwitch').disabled = state.finishingLiveTrip;
   element('liveTripStatus').textContent = isRunning ? 'Ausflug läuft…' : state.activeTrip ? 'Ausflug beenden und speichern…' : 'Bereit zum Ablegen…';
   element('liveTripHint').textContent = isRunning
-    ? `Gestartet am ${new Date(state.activeTrip.started_at).toLocaleString('de-CH')}. Zum Beenden den Schalter ausschalten.`
+    ? `Gestartet am ${new Date(state.activeTrip.started_at).toLocaleString(appLocale())}. Zum Beenden den Schalter ausschalten.`
     : state.activeTrip ? 'Bitte Motorstunden und weitere Angaben ergänzen, dann speichern.' : 'Startzeit wird sicher gespeichert.';
 }
 
@@ -1095,7 +1127,7 @@ window.editTrip = id => {
 };
 
 function formatTripDateTime(value) {
-  return new Date(value).toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(value).toLocaleString(appLocale(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 window.showTripDetails = id => {
@@ -1109,7 +1141,7 @@ window.showTripDetails = id => {
     trip.wind_kmh !== null && trip.wind_kmh !== undefined ? `${trip.wind_kmh} km/h Wind` : ''
   ].filter(Boolean).map(escapeHtml).join(' · ') || '–';
   const waterTemperature = trip.water_temperature_c !== null && trip.water_temperature_c !== undefined ? `${trip.water_temperature_c} °C` : '–';
-  element('tripDetailTitle').textContent = `Ausflug vom ${new Date(trip.start_at).toLocaleDateString('de-CH')}`;
+  element('tripDetailTitle').textContent = `Ausflug vom ${new Date(trip.start_at).toLocaleDateString(appLocale())}`;
   element('tripDetailContent').innerHTML = `<dl class="row mb-0 trip-detail-list">
     <dt class="col-5">Start</dt><dd class="col-7">${formatTripDateTime(trip.start_at)}</dd>
     <dt class="col-5">Ende</dt><dd class="col-7">${formatTripDateTime(trip.end_at)}</dd>
@@ -1144,7 +1176,7 @@ function renderCosts() {
   const costs = currentCosts();
   element('costList').innerHTML = costs.length ? costs.map(cost => {
     const sharing = isSharedCost(cost.id) ? `<div class="small text-secondary mt-1"><i class="bi bi-people me-1"></i>Geteilt${cost.paid_by ? ` · bezahlt von ${escapeHtml(participantName(cost.paid_by))}` : ''}</div>` : '';
-    return `<div class="swipe-entry" data-delete-kind="cost" data-delete-id="${cost.id}"><button class="swipe-delete-action" type="button" data-swipe-delete aria-label="Kostenposten löschen"><i class="bi bi-trash3"></i><span>Löschen</span></button><article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString('de-CH')}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div>${sharing}</div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article></div>`;
+    return `<div class="swipe-entry" data-delete-kind="cost" data-delete-id="${cost.id}"><button class="swipe-delete-action" type="button" data-swipe-delete aria-label="Kostenposten löschen"><i class="bi bi-trash3"></i><span>Löschen</span></button><article class="card entry-card"><div class="card-body py-3"><div class="d-flex justify-content-between gap-2"><div><strong>${escapeHtml(cost.category)}</strong><div class="small text-secondary">${new Date(`${cost.cost_date}T12:00`).toLocaleDateString(appLocale())}${cost.description ? ` · ${escapeHtml(cost.description)}` : ''}</div>${sharing}</div><div class="text-end"><div class="entry-value">${formatCurrency(cost.amount_chf)}</div><button class="btn btn-link btn-sm p-0" onclick="editCost('${cost.id}')" aria-label="Bearbeiten"><i class="bi bi-pencil-square"></i></button><button class="btn btn-link btn-sm p-0 ms-2 text-danger" onclick="deleteCost('${cost.id}')" aria-label="Löschen"><i class="bi bi-trash"></i></button></div></div></div></article></div>`;
   }).join('') : '<div class="empty-state">Für dieses Jahr sind noch keine Kosten erfasst.</div>';
   showCostsView(state.costsViewMode, false);
 }
@@ -1321,7 +1353,7 @@ function renderCostSharing() {
   const canSettle = state.costParticipants.length >= 2;
   element('settlementForm').classList.toggle('d-none', !canSettle);
   const settlements = state.costSettlements.filter(settlement => dateYear(settlement.settlement_date) === state.selectedYear);
-  element('settlementList').innerHTML = settlements.length ? settlements.map(settlement => `<article class="cost-settlement"><div><strong>${escapeHtml(participantName(settlement.from_user_id))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(settlement.to_user_id))}</strong><div class="small text-secondary">${new Date(`${settlement.settlement_date}T12:00`).toLocaleDateString('de-CH')}${settlement.note ? ` · ${escapeHtml(settlement.note)}` : ''}</div></div><div class="text-end"><strong>${formatCurrency(settlement.amount_chf)}</strong><button class="btn btn-link btn-sm p-0 d-block ms-auto text-danger" type="button" onclick="deleteSettlement('${settlement.id}')">Löschen</button></div></article>`).join('') : '<div class="empty-state py-2">Noch keine Ausgleichszahlungen in diesem Jahr.</div>';
+  element('settlementList').innerHTML = settlements.length ? settlements.map(settlement => `<article class="cost-settlement"><div><strong>${escapeHtml(participantName(settlement.from_user_id))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(settlement.to_user_id))}</strong><div class="small text-secondary">${new Date(`${settlement.settlement_date}T12:00`).toLocaleDateString(appLocale())}${settlement.note ? ` · ${escapeHtml(settlement.note)}` : ''}</div></div><div class="text-end"><strong>${formatCurrency(settlement.amount_chf)}</strong><button class="btn btn-link btn-sm p-0 d-block ms-auto text-danger" type="button" onclick="deleteSettlement('${settlement.id}')">Löschen</button></div></article>`).join('') : '<div class="empty-state py-2">Noch keine Ausgleichszahlungen in diesem Jahr.</div>';
 }
 
 async function saveCostParticipants(event) {
@@ -1652,7 +1684,7 @@ async function importExcel(event) {
   }
 }
 
-function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') { renderDashboardSettings(); renderCrew(); } }
+function showView(view) { document.querySelectorAll('.app-view').forEach(section => section.classList.toggle('d-none', section.id !== `${view}View`)); document.querySelectorAll('#mainNav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view)); if (view === 'settings') { renderDashboardSettings(); renderCrew(); } applyLanguage(); }
 function switchBoat() {
   if (state.boats.length < 2) return showNotice('Du bist aktuell nur Mitglied dieses Boots.');
   element('boatSwitchList').innerHTML = state.boats.map(boat => {
@@ -1687,8 +1719,9 @@ function showNotice(message, variant = 'success', { force = false } = {}) {
   const notice = element('notice');
   notice.className = `alert alert-${variant}`;
   notice.textContent = message;
+  localize(notice);
   notice.classList.remove('d-none');
   window.clearTimeout(showNotice.timeout);
   showNotice.timeout = window.setTimeout(() => notice.classList.add('d-none'), variant === 'danger' ? 7000 : 5000);
 }
-function setBusy(button, busy, label) { button.disabled = busy; button.textContent = label; }
+function setBusy(button, busy, label) { button.disabled = busy; button.textContent = label; localize(button); }
