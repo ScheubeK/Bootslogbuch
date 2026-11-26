@@ -630,22 +630,191 @@ function showSeasonReview() {
   bootstrap.Modal.getOrCreateInstance(element('seasonReviewModal')).show();
 }
 
+function roundedRect(context, x, y, width, height, radius) {
+  const corner = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + corner, y);
+  context.arcTo(x + width, y, x + width, y + height, corner);
+  context.arcTo(x + width, y + height, x, y + height, corner);
+  context.arcTo(x, y + height, x, y, corner);
+  context.arcTo(x, y, x + width, y, corner);
+  context.closePath();
+}
+
+function drawRoundedRect(context, x, y, width, height, radius, fillStyle) {
+  roundedRect(context, x, y, width, height, radius);
+  context.fillStyle = fillStyle;
+  context.fill();
+}
+
+function drawShareText(context, text, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = '';
+  words.forEach(word => {
+    const candidate = line ? `${line} ${word}` : word;
+    if (context.measureText(candidate).width <= maxWidth || !line) line = candidate;
+    else { lines.push(line); line = word; }
+  });
+  if (line) lines.push(line);
+  lines.slice(0, maxLines).forEach((item, index) => context.fillText(index === maxLines - 1 && lines.length > maxLines ? `${item}…` : item, x, y + index * lineHeight));
+}
+
+function loadShareImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = source;
+  });
+}
+
+function seasonShareLabel(label) {
+  return state.locale === 'en' ? window.BootslogbuchI18n?.english?.[label] || label : label;
+}
+
+function seasonShareNumber(value, digits = 1) {
+  return Number(value).toLocaleString(appLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+async function seasonReviewImage(review) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1600;
+  const context = canvas.getContext('2d');
+  const width = canvas.width;
+  context.fillStyle = '#f2f6fb';
+  context.fillRect(0, 0, width, canvas.height);
+
+  const headerGradient = context.createLinearGradient(0, 0, width, 270);
+  headerGradient.addColorStop(0, '#0757bf');
+  headerGradient.addColorStop(1, '#11a4c5');
+  context.fillStyle = headerGradient;
+  context.fillRect(0, 0, width, 300);
+  context.globalAlpha = .12;
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.arc(930, 52, 190, 0, Math.PI * 2);
+  context.fill();
+  context.beginPath();
+  context.arc(104, 310, 190, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = 1;
+
+  drawRoundedRect(context, 54, 48, 128, 128, 28, '#ffffff');
+  try {
+    const logo = await loadShareImage('./assets/bootslogbuch-logo-transparent.png');
+    const scale = Math.min(104 / logo.width, 88 / logo.height);
+    const logoWidth = logo.width * scale;
+    const logoHeight = logo.height * scale;
+    context.drawImage(logo, 54 + (128 - logoWidth) / 2, 48 + (128 - logoHeight) / 2, logoWidth, logoHeight);
+  } catch (_) {
+    context.fillStyle = '#0757bf';
+    context.font = 'bold 50px sans-serif';
+    context.fillText('B', 92, 126);
+  }
+  context.fillStyle = '#ffffff';
+  context.font = '600 31px system-ui, sans-serif';
+  context.fillText('BOOTLOGBUCH', 212, 92);
+  context.font = 'bold 64px system-ui, sans-serif';
+  drawShareText(context, `${state.locale === 'en' ? 'Season' : 'Saison'} ${review.year}`, 212, 162, 790, 72, 1);
+  context.font = '400 31px system-ui, sans-serif';
+  drawShareText(context, review.boatName, 212, 218, 760, 39, 1);
+
+  drawRoundedRect(context, 40, 246, width - 80, 1010, 32, '#ffffff');
+  context.fillStyle = '#1f2937';
+  context.font = 'bold 39px system-ui, sans-serif';
+  context.fillText(state.locale === 'en' ? 'Your season in review' : 'Dein Saisonrückblick', 88, 348);
+  context.fillStyle = '#64748b';
+  context.font = '400 27px system-ui, sans-serif';
+  context.fillText(state.locale === 'en' ? `Key figures and moments from ${review.year}.` : `Die schönsten Zahlen und Momente von ${review.year}.`, 88, 392);
+
+  const summary = [
+    { icon: '⚓', label: seasonShareLabel('Ausflüge'), value: String(review.trips), color: '#eaf1ff' },
+    { icon: '◷', label: seasonShareLabel('Zeit auf See'), value: formatHours(review.seaTime), color: '#e5f8fb' },
+    { icon: '⚙', label: seasonShareLabel('Motorstunden'), value: `${seasonShareNumber(review.engineHours)} h`, color: '#fff5dd' },
+    { icon: '⛽', label: seasonShareLabel('Treibstoff'), value: review.hasFuelData ? `${seasonShareNumber(review.fuelLitres)} l` : '–', color: '#fff0e4' },
+    { icon: '◴', label: seasonShareLabel('Ø Ausflugsdauer'), value: review.averageTripDuration !== null ? formatHours(review.averageTripDuration) : '–', color: '#f1ebfb', wide: true }
+  ];
+  const gap = 22;
+  const cardWidth = (width - 176 - gap) / 2;
+  let cardY = 438;
+  summary.forEach((item, index) => {
+    const isWide = item.wide;
+    const cardX = isWide ? 88 : 88 + (index % 2) * (cardWidth + gap);
+    if (index === 2) cardY += 146 + gap;
+    if (index === 4) cardY += 146 + gap;
+    const itemWidth = isWide ? width - 176 : cardWidth;
+    drawRoundedRect(context, cardX, cardY, itemWidth, 146, 22, item.color);
+    context.fillStyle = '#0f5fc4';
+    context.font = '38px system-ui, sans-serif';
+    context.fillText(item.icon, cardX + 24, cardY + 55);
+    context.fillStyle = '#64748b';
+    context.font = '500 23px system-ui, sans-serif';
+    context.fillText(item.label, cardX + 24, cardY + 91);
+    context.fillStyle = '#172033';
+    context.font = 'bold 34px system-ui, sans-serif';
+    drawShareText(context, item.value, cardX + 24, cardY + 126, itemWidth - 48, 36, 1);
+  });
+
+  const highlights = review.highlights.slice(0, 7);
+  let highlightY = 1004;
+  context.fillStyle = '#1f2937';
+  context.font = 'bold 34px system-ui, sans-serif';
+  context.fillText(seasonShareLabel('Highlights'), 88, highlightY);
+  highlightY += 34;
+  highlights.forEach((highlight, index) => {
+    const y = highlightY + index * 73;
+    context.strokeStyle = '#e5eaf0';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(88, y + 54);
+    context.lineTo(width - 88, y + 54);
+    context.stroke();
+    context.fillStyle = '#0d6efd';
+    context.beginPath();
+    context.arc(105, y + 24, 9, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = '#64748b';
+    context.font = '500 23px system-ui, sans-serif';
+    context.fillText(seasonShareLabel(highlight.label), 130, y + 20);
+    context.fillStyle = '#1f2937';
+    context.font = '600 25px system-ui, sans-serif';
+    drawShareText(context, highlight.value, 130, y + 47, width - 220, 28, 1);
+  });
+  context.fillStyle = '#64748b';
+  context.font = '400 22px system-ui, sans-serif';
+  context.fillText(state.locale === 'en' ? 'Created with Bootslogbuch' : 'Erstellt mit Bootslogbuch', 88, 1522);
+  context.textAlign = 'right';
+  context.fillText(`${state.locale === 'en' ? 'Season' : 'Saison'} ${review.year}`, width - 88, 1522);
+  context.textAlign = 'left';
+
+  return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Saisonkarte konnte nicht erstellt werden.')), 'image/jpeg', .92));
+}
+
 async function shareSeasonReview() {
   const review = state.seasonReview;
   if (!review) return showNotice('Für diesen Saisonrückblick sind keine Daten vorhanden.', 'warning');
   const text = [
-    `Saisonrückblick ${review.year} · ${review.boatName}`,
+    `${state.locale === 'en' ? 'Season review' : 'Saisonrückblick'} ${review.year} · ${review.boatName}`,
     '',
-    `${review.trips} Ausflüge`,
-    `${formatHours(review.seaTime)} auf See`,
-    `${review.engineHours.toFixed(1).replace('.', ',')} Motorstunden`,
-    review.hasFuelData ? `${review.fuelLitres.toFixed(1).replace('.', ',')} l Treibstoff` : null,
-    review.averageTripDuration !== null ? `Ø Ausflugsdauer ${formatHours(review.averageTripDuration)}` : null,
-    ...review.highlights.map(highlight => `${highlight.label}: ${highlight.value}`)
+    `${review.trips} ${seasonShareLabel('Ausflüge')}`,
+    `${formatHours(review.seaTime)} ${state.locale === 'en' ? 'on the water' : 'auf See'}`,
+    `${seasonShareNumber(review.engineHours)} ${seasonShareLabel('Motorstunden')}`,
+    review.hasFuelData ? `${seasonShareNumber(review.fuelLitres)} l ${seasonShareLabel('Treibstoff')}` : null,
+    review.averageTripDuration !== null ? `${seasonShareLabel('Ø Ausflugsdauer')} ${formatHours(review.averageTripDuration)}` : null,
+    ...review.highlights.map(highlight => `${seasonShareLabel(highlight.label)}: ${highlight.value}`)
   ].filter(Boolean).join('\n');
   try {
+    const image = await seasonReviewImage(review);
+    const filename = `bootslogbuch-saison-${review.year}-${review.boatName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'boot'}.jpg`;
+    const file = new File([image], filename, { type: 'image/jpeg' });
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({ title: `${state.locale === 'en' ? 'Season review' : 'Saisonrückblick'} ${review.year} · ${review.boatName}`, text, files: [file] });
+      return;
+    }
     if (navigator.share) {
-      await navigator.share({ title: `Saisonrückblick ${review.year} · ${review.boatName}`, text, url: window.location.origin });
+      await navigator.share({ title: `${state.locale === 'en' ? 'Season review' : 'Saisonrückblick'} ${review.year} · ${review.boatName}`, text, url: window.location.origin });
       return;
     }
     await navigator.clipboard.writeText(text);
