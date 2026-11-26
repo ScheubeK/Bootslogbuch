@@ -678,9 +678,14 @@ function seasonShareNumber(value, digits = 1) {
 }
 
 async function seasonReviewImage(review) {
+  const highlights = review.highlights.slice(0, 7);
+  const highlightsStart = 1038;
+  const highlightsBottom = highlights.length ? highlightsStart + (highlights.length - 1) * 73 + 54 : highlightsStart;
+  const panelBottom = Math.max(1256, highlightsBottom + 58);
+  const footerY = panelBottom + 66;
   const canvas = document.createElement('canvas');
   canvas.width = 1080;
-  canvas.height = 1600;
+  canvas.height = footerY + 70;
   const context = canvas.getContext('2d');
   const width = canvas.width;
   context.fillStyle = '#f2f6fb';
@@ -721,7 +726,7 @@ async function seasonReviewImage(review) {
   context.font = '400 31px system-ui, sans-serif';
   drawShareText(context, review.boatName, 212, 218, 760, 39, 1);
 
-  drawRoundedRect(context, 40, 246, width - 80, 1010, 32, '#ffffff');
+  drawRoundedRect(context, 40, 246, width - 80, panelBottom - 246, 32, '#ffffff');
   context.fillStyle = '#1f2937';
   context.font = 'bold 39px system-ui, sans-serif';
   context.fillText(state.locale === 'en' ? 'Your season in review' : 'Dein Saisonrückblick', 88, 348);
@@ -757,7 +762,6 @@ async function seasonReviewImage(review) {
     drawShareText(context, item.value, cardX + 24, cardY + 126, itemWidth - 48, 36, 1);
   });
 
-  const highlights = review.highlights.slice(0, 7);
   let highlightY = 1004;
   context.fillStyle = '#1f2937';
   context.font = 'bold 34px system-ui, sans-serif';
@@ -784,9 +788,9 @@ async function seasonReviewImage(review) {
   });
   context.fillStyle = '#64748b';
   context.font = '400 22px system-ui, sans-serif';
-  context.fillText(state.locale === 'en' ? 'Created with Bootslogbuch' : 'Erstellt mit Bootslogbuch', 88, 1522);
+  context.fillText(state.locale === 'en' ? 'Created with Bootslogbuch' : 'Erstellt mit Bootslogbuch', 88, footerY);
   context.textAlign = 'right';
-  context.fillText(`${state.locale === 'en' ? 'Season' : 'Saison'} ${review.year}`, width - 88, 1522);
+  context.fillText(`${state.locale === 'en' ? 'Season' : 'Saison'} ${review.year}`, width - 88, footerY);
   context.textAlign = 'left';
 
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Saisonkarte konnte nicht erstellt werden.')), 'image/jpeg', .92));
