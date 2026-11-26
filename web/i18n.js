@@ -47,9 +47,9 @@
     nodes.forEach(node => { if (!node.parentElement || ['SCRIPT', 'STYLE'].includes(node.parentElement.tagName)) return; node.__bootslogbuchGerman ??= node.nodeValue; node.nodeValue = translated(node.__bootslogbuchGerman, locale); });
     root.querySelectorAll?.('*').forEach(element => attributes.forEach(attribute => {
       if (!element.hasAttribute(attribute)) return;
-      const key = `bootslogbuchGerman${attribute}`;
-      element.dataset[key] ??= element.getAttribute(attribute);
-      element.setAttribute(attribute, translated(element.dataset[key], locale));
+      element.__bootslogbuchGermanAttributes ??= {};
+      element.__bootslogbuchGermanAttributes[attribute] ??= element.getAttribute(attribute);
+      element.setAttribute(attribute, translated(element.__bootslogbuchGermanAttributes[attribute], locale));
     }));
   }
   window.BootslogbuchI18n = { localize, english };
