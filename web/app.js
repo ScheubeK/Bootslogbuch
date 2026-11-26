@@ -82,7 +82,7 @@ const dateYear = value => String(value || '').slice(0, 4);
 const localize = root => window.BootslogbuchI18n?.localize(root, state.locale);
 function applyLanguage() {
   document.documentElement.lang = state.locale;
-  element('languagePicker').value = state.locale;
+  document.querySelectorAll('[data-language-picker]').forEach(picker => { picker.value = state.locale; });
   const documentPages = { './info.html': './info-en.html', './privacy.html': './privacy-en.html', './terms.html': './terms-en.html', './manual.html': './manual-en.html' };
   document.querySelectorAll('a[href]').forEach(link => {
     const germanHref = link.dataset.germanHref || link.getAttribute('href');
@@ -140,7 +140,7 @@ async function initialize() {
 }
 
 function registerEvents() {
-  element('languagePicker').addEventListener('change', event => changeLanguage(event.target.value));
+  document.querySelectorAll('[data-language-picker]').forEach(picker => picker.addEventListener('change', event => changeLanguage(event.target.value)));
   element('emailAuthForm').addEventListener('submit', submitEmailAuth);
   element('googleLoginButton').addEventListener('click', signInWithGoogle);
   element('showRegistrationButton').addEventListener('click', () => setAuthMode('signup'));
@@ -1713,7 +1713,10 @@ async function selectBoat(boatId) {
   showNotice(`Zu „${selectedBoat.name}“ gewechselt.`);
 }
 async function signOut() { await state.client.auth.signOut(); showNotice('Abgemeldet.'); }
-function showScreen(id) { ['loadingScreen', 'loginScreen', 'setupScreen', 'appScreen'].forEach(screenId => element(screenId).classList.toggle('d-none', screenId !== id)); }
+function showScreen(id) {
+  ['loadingScreen', 'loginScreen', 'setupScreen', 'appScreen'].forEach(screenId => element(screenId).classList.toggle('d-none', screenId !== id));
+  element('authLanguagePickerWrapper').classList.toggle('d-none', id === 'appScreen');
+}
 function showNotice(message, variant = 'success', { force = false } = {}) {
   if (variant === 'success' && !force) return;
   const notice = element('notice');
