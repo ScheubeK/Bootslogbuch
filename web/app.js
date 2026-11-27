@@ -80,6 +80,7 @@ const numberOrZero = value => {
 };
 const dateYear = value => String(value || '').slice(0, 4);
 const localize = root => window.BootslogbuchI18n?.localize(root, state.locale);
+const translate = value => state.locale === 'en' ? window.BootslogbuchI18n?.english?.[value] || value : value;
 function applyLanguage() {
   document.documentElement.lang = state.locale;
   document.querySelectorAll('[data-language-picker]').forEach(picker => { picker.value = state.locale; });
@@ -1502,23 +1503,23 @@ function renderCostSharing() {
   if (unavailable) return;
   const isOwner = state.role === 'owner';
   const selected = new Set(state.costParticipants.map(person => person.user_id));
-  element('costParticipantMembers').innerHTML = state.boatMembers.length ? state.boatMembers.map(member => `<label class="form-check cost-share-person"><input class="form-check-input" type="checkbox" name="costParticipant" value="${member.user_id}"${selected.has(member.user_id) ? ' checked' : ''}${isOwner ? '' : ' disabled'}><span class="form-check-label">${escapeHtml(participantName(member.user_id))}<small class="text-secondary d-block">${member.role === 'owner' ? 'Kapitän' : 'Crew'}</small></span></label>`).join('') : '<div class="empty-state py-2">Noch keine Bootsmitglieder vorhanden.</div>';
+  element('costParticipantMembers').innerHTML = state.boatMembers.length ? state.boatMembers.map(member => `<label class="form-check cost-share-person"><input class="form-check-input" type="checkbox" name="costParticipant" value="${member.user_id}"${selected.has(member.user_id) ? ' checked' : ''}${isOwner ? '' : ' disabled'}><span class="form-check-label">${escapeHtml(participantName(member.user_id))}<small class="text-secondary d-block">${translate(member.role === 'owner' ? 'Kapitän' : 'Crew')}</small></span></label>`).join('') : `<div class="empty-state py-2">${translate('Noch keine Bootsmitglieder vorhanden.')}</div>`;
   element('saveCostParticipants').classList.toggle('d-none', !isOwner);
   element('costParticipantsHint').textContent = isOwner
-    ? 'Diese Personen werden bei neuen geteilten Kosten standardmässig berücksichtigt. Bestehende Abrechnungen bleiben unverändert.'
-    : 'Die Kostenbeteiligten werden vom Kapitän verwaltet. Bestehende Abrechnungen bleiben unverändert.';
+    ? translate('Diese Personen werden bei neuen geteilten Kosten standardmässig berücksichtigt. Bestehende Abrechnungen bleiben unverändert.')
+    : translate('Die Kostenbeteiligten werden vom Kapitän verwaltet. Bestehende Abrechnungen bleiben unverändert.');
   element('costSharingYear').textContent = state.selectedYear;
   const sharedCostTotal = currentCosts().filter(cost => isSharedCost(cost.id)).reduce((total, cost) => total + numberOrZero(cost.amount_chf), 0);
-  element('costSharingTotal').textContent = `Gemeinsame Kosten: ${formatCurrency(sharedCostTotal)}`;
+  element('costSharingTotal').textContent = `${translate('Gemeinsame Kosten')}: ${formatCurrency(sharedCostTotal)}`;
   const hasParticipants = state.costParticipants.length > 0;
   const balances = calculateCostBalances();
   element('costBalanceList').innerHTML = hasParticipants ? balances.map(item => {
-    const status = item.balance > 0.004 ? `<span class="text-success">Erhält ${formatCurrency(item.balance)}</span>` : item.balance < -0.004 ? `<span class="text-danger">Zahlt ${formatCurrency(-item.balance)}</span>` : '<span class="text-success">Ausgeglichen</span>';
-    return `<article class="cost-balance"><div><strong>${escapeHtml(participantName(item.userId))}</strong><div class="small text-secondary">Anteil ${formatCurrency(item.share)} · bezahlt ${formatCurrency(item.paid)}</div></div><strong>${status}</strong></article>`;
-  }).join('') : '<div class="empty-state py-2">Lege zuerst die Kostenbeteiligten fest.</div>';
+    const status = item.balance > 0.004 ? `<span class="text-success">${translate('Erhält')} ${formatCurrency(item.balance)}</span>` : item.balance < -0.004 ? `<span class="text-danger">${translate('Zahlt')} ${formatCurrency(-item.balance)}</span>` : `<span class="text-success">${translate('Ausgeglichen')}</span>`;
+    return `<article class="cost-balance"><div><strong>${escapeHtml(participantName(item.userId))}</strong><div class="small text-secondary">${translate('Anteil')} ${formatCurrency(item.share)} · ${translate('bezahlt')} ${formatCurrency(item.paid)}</div></div><strong>${status}</strong></article>`;
+  }).join('') : `<div class="empty-state py-2">${translate('Lege zuerst die Kostenbeteiligten fest.')}</div>`;
   const suggestions = suggestedSettlements(balances);
   element('settlementSuggestionCard').classList.toggle('d-none', !suggestions.length);
-  element('settlementSuggestions').innerHTML = suggestions.map(suggestion => `<div class="cost-settlement-suggestion"><span><strong>${escapeHtml(participantName(suggestion.from))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(suggestion.to))}</strong><small class="d-block text-secondary">${formatCurrency(suggestion.amount)}</small></span><button class="btn btn-outline-primary btn-sm" type="button" onclick="useSettlementSuggestion('${suggestion.from}', '${suggestion.to}', ${suggestion.amount})">Übernehmen</button></div>`).join('');
+  element('settlementSuggestions').innerHTML = suggestions.map(suggestion => `<div class="cost-settlement-suggestion"><span><strong>${escapeHtml(participantName(suggestion.from))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(suggestion.to))}</strong><small class="d-block text-secondary">${formatCurrency(suggestion.amount)}</small></span><button class="btn btn-outline-primary btn-sm" type="button" onclick="useSettlementSuggestion('${suggestion.from}', '${suggestion.to}', ${suggestion.amount})">${translate('Übernehmen')}</button></div>`).join('');
   const optionMarkup = state.costParticipants.map(person => `<option value="${person.user_id}">${escapeHtml(participantName(person.user_id))}</option>`).join('');
   element('settlementFrom').innerHTML = optionMarkup;
   element('settlementTo').innerHTML = optionMarkup;
@@ -1526,7 +1527,7 @@ function renderCostSharing() {
   const canSettle = state.costParticipants.length >= 2;
   element('settlementForm').classList.toggle('d-none', !canSettle);
   const settlements = state.costSettlements.filter(settlement => dateYear(settlement.settlement_date) === state.selectedYear);
-  element('settlementList').innerHTML = settlements.length ? settlements.map(settlement => `<article class="cost-settlement"><div><strong>${escapeHtml(participantName(settlement.from_user_id))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(settlement.to_user_id))}</strong><div class="small text-secondary">${new Date(`${settlement.settlement_date}T12:00`).toLocaleDateString(appLocale())}${settlement.note ? ` · ${escapeHtml(settlement.note)}` : ''}</div></div><div class="text-end"><strong>${formatCurrency(settlement.amount_chf)}</strong><button class="btn btn-link btn-sm p-0 d-block ms-auto text-danger" type="button" onclick="deleteSettlement('${settlement.id}')">Löschen</button></div></article>`).join('') : '<div class="empty-state py-2">Noch keine Ausgleichszahlungen in diesem Jahr.</div>';
+  element('settlementList').innerHTML = settlements.length ? settlements.map(settlement => `<article class="cost-settlement"><div><strong>${escapeHtml(participantName(settlement.from_user_id))}</strong> <i class="bi bi-arrow-right mx-1"></i> <strong>${escapeHtml(participantName(settlement.to_user_id))}</strong><div class="small text-secondary">${new Date(`${settlement.settlement_date}T12:00`).toLocaleDateString(appLocale())}${settlement.note ? ` · ${escapeHtml(settlement.note)}` : ''}</div></div><div class="text-end"><strong>${formatCurrency(settlement.amount_chf)}</strong><button class="btn btn-link btn-sm p-0 d-block ms-auto text-danger" type="button" onclick="deleteSettlement('${settlement.id}')">${translate('Löschen')}</button></div></article>`).join('') : `<div class="empty-state py-2">${translate('Noch keine Ausgleichszahlungen in diesem Jahr.')}</div>`;
 }
 
 async function saveCostParticipants(event) {
